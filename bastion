@@ -1,0 +1,3 @@
+apt-get update && apt-get upgrade -y
+sed -i 's/jammy/noble/g' /etc/apt/sources.list
+apt-get update && apt-get upgrade -y
