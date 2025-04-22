@@ -17,6 +17,7 @@ apt-get update
 # Install docker-ce
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 # Install NPM
+mkdir /config
 docker run -d \
   --name=npm \
   -p 80:80 \
@@ -36,4 +37,4 @@ docker run -d \
   -p 3579:3579 \
   -v /path/to/ombi/config:/config \
   --restart unless-stopped \
-  lscr.io/linuxserver/ombi:latest
+  linuxserver/ombi:latest
