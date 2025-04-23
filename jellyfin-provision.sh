@@ -5,8 +5,8 @@ apt-get update && apt-get upgrade -y
 # Grab Curl amd install Jellyfin #
 apt install curl -y
 curl https://repo.jellyfin.org/install-debuntu.sh | bash
-# Pull renderer ID and set perms #
-cat /etc/group = render:x:108:jellyfin
+# Pull renderer ID and set perms ie: = render:x:108:jellyfin #
+cat /etc/group
 usermod -aG render jellyfin
 # Install Intel Drivers #
 apt install -y intel-opencl-icd
