@@ -10,5 +10,5 @@ apt update
 # Install Qbit
 apt install qbittorrent-nox
 # Add Start Service
-sudo systemctl daemon-reload
+systemctl daemon-reload
 systemctl enable qbittorrent-nox
