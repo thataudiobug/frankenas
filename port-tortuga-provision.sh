@@ -12,3 +12,7 @@ apt install qbittorrent-nox
 # Add Start Service
 systemctl daemon-reload
 systemctl enable qbittorrent-nox
+
+# Install Prowlarr
+# Install Dependancies
+sudo apt install curl sqlite3
