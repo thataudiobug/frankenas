@@ -23,8 +23,8 @@ docker run -d \
   -p 80:80 \
   -p 81:81 \
   -p 443:443 \
-  -v /npm/data:/data \
-  -v /npm/letsencrypt:/letsencrypt \
+  -v /mnt/config/npm/data:/data \
+  -v /mnt/config/npm/letsencrypt:/letsencrypt \
   --restart unless-stopped \
   jc21/nginx-proxy-manager:latest
 # Install Ombi
