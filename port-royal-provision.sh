@@ -16,8 +16,10 @@ echo \
 apt-get update
 # Install docker-ce
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-# Install NPM
-mkdir /config
+#install portainer
+docker volume create portainer_data
+docker run -d -p 8000:8000 -p 9443:9443 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
+#Install NPM
 docker run -d \
   --name=npm \
   -p 80:80 \
