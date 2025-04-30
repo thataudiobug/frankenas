@@ -38,3 +38,13 @@ docker run -d \
   -v /path/to/ombi/config:/config \
   --restart unless-stopped \
   linuxserver/ombi:latest
+# Install Prowlarr
+docker run -d \
+  --name=prowlarr \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e TZ=America/Detroit \
+  -p 9696:9696 \
+  -v /mnt/config/prowlarr:/config \
+  --restart unless-stopped \
+  linuxserver/prowlarr:latest
