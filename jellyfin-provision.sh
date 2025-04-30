@@ -1,7 +1,3 @@
-# get updates and update to 24 LTS #
-apt-get update && apt-get upgrade -y
-sed -i 's/jammy/noble/g' /etc/apt/sources.list
-apt-get update && apt-get upgrade -y
 # Grab Curl amd install Jellyfin #
 apt install curl -y
 curl https://repo.jellyfin.org/install-debuntu.sh | bash
