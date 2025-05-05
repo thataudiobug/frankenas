@@ -37,7 +37,7 @@ docker run -d \
   -e TZ=Etc/UTC \
   -e BASE_URL=/ `#optional` \
   -p 3579:3579 \
-  -v /path/to/ombi/config:/config \
+  -v /mnt/config/ombi:/config \
   --restart unless-stopped \
   linuxserver/ombi:latest
 # Install Prowlarr
