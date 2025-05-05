@@ -17,7 +17,7 @@ docker run -d \
   --name=radarr \
   -e PUID=1000 \
   -e PGID=1000 \
-  -e TZ=america/detroit \
+  -e TZ=America/Detroit \
   -p 7878:7878 \
   -v /mnt/config/configs/radarr:/config \
   -v /mnt/media/movies:/movies \
