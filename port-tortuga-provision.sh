@@ -17,10 +17,10 @@ docker run -d \
   --name=radarr \
   -e PUID=1000 \
   -e PGID=1000 \
-  -e TZ=Etc/UTC \
+  -e TZ=america/detroit \
   -p 7878:7878 \
   -v /mnt/config/configs/radarr:/config \
-  -v /mnt/media/movies:/movies `#optional` \
-  -v /mnt/media/downloads:/downloads `#optional` \
+  -v /mnt/media/movies:/movies \
+  -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
   linuxserver/radarr:latest
