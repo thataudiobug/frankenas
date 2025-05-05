@@ -12,7 +12,15 @@ apt install qbittorrent-nox
 # Add Start Service
 systemctl daemon-reload
 systemctl enable qbittorrent-nox
-
-# Install Prowlarr
-# Install Dependancies
-sudo apt install curl sqlite3
+# Install Radarr
+docker run -d \
+  --name=radarr \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e TZ=Etc/UTC \
+  -p 7878:7878 \
+  -v /mnt/config/configs/radarr:/config \
+  -v /mnt/media/movies:/movies `#optional` \
+  -v /mnt/media/downloads:/downloads `#optional` \
+  --restart unless-stopped \
+  linuxserver/radarr:latest
