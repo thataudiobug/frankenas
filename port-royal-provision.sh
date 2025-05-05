@@ -69,7 +69,7 @@ docker run -d \
   -e PGID=1000 \
   -e TZ=America/Detroit \
   -p 8989:8989 \
-  -v /mnt/config/configs/sonarr:/config \
+  -v /mnt/config/sonarr:/config \
   -v /mnt/media/tv:/tv \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
@@ -81,7 +81,7 @@ docker run -d \
   -e PGID=1000 \
   -e TZ=America/Detroit \
   -p 8686:8686 \
-  -v /mnt/config/configs/lidarr:/config \
+  -v /mnt/config/lidarr:/config \
   -v /mnt/media/music:/music \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
