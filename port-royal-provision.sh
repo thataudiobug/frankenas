@@ -50,3 +50,39 @@ docker run -d \
   -v /mnt/config/prowlarr:/config \
   --restart unless-stopped \
   linuxserver/prowlarr:latest
+# Install Radarr
+docker run -d \
+  --name=radarr \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e TZ=America/Detroit \
+  -p 7878:7878 \
+  -v /mnt/config/radarr:/config \
+  -v /mnt/media/movies:/movies \
+  -v /mnt/media/downloads:/downloads \
+  --restart unless-stopped \
+  linuxserver/radarr:latest
+# Install Sonarr
+docker run -d \
+  --name=sonarr \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e TZ=America/Detroit \
+  -p 8989:8989 \
+  -v /mnt/config/configs/sonarr:/config \
+  -v /mnt/media/tv:/tv \
+  -v /mnt/media/downloads:/downloads \
+  --restart unless-stopped \
+  linuxserver/sonarr:latest
+# Install Lidarr
+docker run -d \
+  --name=lidarr \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e TZ=America/Detroit \
+  -p 8686:8686 \
+  -v /mnt/config/configs/lidarr:/config \
+  -v /mnt/media/music:/music \
+  -v /mnt/media/downloads:/downloads \
+  --restart unless-stopped \
+  linuxserver/lidarr:latest
