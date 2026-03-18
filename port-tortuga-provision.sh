@@ -47,17 +47,31 @@ systemctl start qemu-guest-agent
 systemctl enable qemu-guest-agent
 echo "Installing qemu-guest-agent... Done"
 
+# Get cifs utils
+if ! command -v curl >/dev/null 2>&1 
+then
+    echo "Installing cifs-utils"
+    apt install cifs-utils -y
+    echo "Installing cifs-utils... Done"
+else
+    echo "cifs-utils is installed, moving on."
+fi
+
 # Create smb directories
 mkdir /mnt/media
 mkdir /mnt/config
 echo "Creating SMB folders... Done"
-# Ask human for SMB user creds
-CRED_FILE="$HOME/.smbcredentials"
-read -p 'Please enter the SMB connection Username: ' SMB_USER
-read -sp 'Please enter the SMB connection password: ' SMB_PASS
-echo "username=$SMB_USER" >> "$CRED_FILE" 
-echo "password=$SMB_PASS" >> "$CRED_FILE"
-chmod 600 "$CRED_FILE"
+
+# Ask the human for SMB user creds
+CREDFILE="$HOME/.smbcredentials"
+read -p 'Please enter the SMB connection username: ' SMBUSER
+read -sp 'Please enter the SMB connection password: ' SMBPASS
+rm "$CREDFILE"
+touch "$CREDFILE"
+echo "username=$SMBUSER" >> "$CREDFILE" 
+echo "password=$SMBPASS" >> "$CREDFILE"
+chmod 600 "$CREDFILE"
+echo
 echo "SMB credentails save... Done."
 
 # Setup smb connections
@@ -166,7 +180,26 @@ docker run -d \
   linuxserver/qbittorrent:latest
 echo "Installing Qbit... Done"
 
+PIACREDFILE="/home/casey/piacreds"
+read -p 'Please enter the PIA connection username: ' PIAUSER
+read -sp 'Please enter the PIA connection password: ' PIAPASS
+rm "$PIACREDFILE"
+touch "$PIACREDFILE"
+echo "username=$PIAUSER" >> "$PIACREDFILE" 
+echo "password=$PIAPASS" >> "$PIACREDFILE"
+echo
+echo "PIA credentails save... Done."
+
 # Installing PIA VPN
-curl https://installers.privateinternetaccess.com/download/pia-linux-3.7-08412.run
-sh pia-linux-3.7-08412.run
+wget https://installers.privateinternetaccess.com/download/pia-linux-3.7-08412.run
+chmod 777 pia-linux-3.7-08412.run
+./pia-linux-3.7-08412.run
 echo "Installing PIA... Done"
+
+# Initialize PIA VPN
+piactl login $PIACREDFILE
+piactl background enable
+piactl set region ca-montreal
+piactl connect
+piactl get connectionstate
+piactl get vpnip
