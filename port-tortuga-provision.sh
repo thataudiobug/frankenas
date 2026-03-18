@@ -193,7 +193,7 @@ echo "PIA credentails save... Done."
 # Installing PIA VPN
 wget https://installers.privateinternetaccess.com/download/pia-linux-3.7-08412.run
 chmod 777 pia-linux-3.7-08412.run
-./pia-linux-3.7-08412.run
+sudo -u "$SUDO_USER" ./pia-linux-3.7-08412.run
 echo "Installing PIA... Done"
 
 # Initialize PIA VPN
