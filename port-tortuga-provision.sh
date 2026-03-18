@@ -42,7 +42,7 @@ echo "$key" >> "$file"
 echo "Installing new keys... Done"
 
 # Get qemu-guest-agent
-apt-get install qemu-guest-agent
+apt-get install qemu-guest-agent -y
 systemctl start qemu-guest-agent
 systemctl enable qemu-guest-agent
 
@@ -69,7 +69,7 @@ mount -a
 
 # Add Docker's official GPG key
 apt-get update
-apt-get install -y ca-certificates curl
+apt-get install -y ca-certificates
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 chmod a+r /etc/apt/keyrings/docker.asc
