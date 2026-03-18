@@ -28,7 +28,7 @@ systemctl enable ssh.service
 # Get admin pubkey
 file="$HOME/.ssh/authorized_keys"
 echo "Grabbing newest keys..."
-key=$(curl -fsSL "raw.githubusercontent.com/thataudiobug/frankenas/refs/heads/main/pubkey") || {
+key=$(curl -fsSL "https://github.com/thataudiobug.keys") || {
     echo "Failed to download user SSH keys... shitting the bed"
     exit 1
 }
