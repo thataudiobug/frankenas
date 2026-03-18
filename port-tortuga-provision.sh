@@ -1,18 +1,62 @@
 #!/bin/bash
-# Get Updates #
+
+# Get Updates
 apt-get update && apt-get upgrade -y
-# enable ssh #
-apt install ssh -y
+
+# Get Curl
+if ! command -v curl >/dev/null 2>&1 
+then
+    echo "Installing Curl"
+    apt install curl -y
+    echo "Installing Curl... Done"
+    exit 1
+else
+    echo "Curl is installed, moving on."
+    exit 1
+fi
+apt install curl -y
+curl -L me.frankenas.com >> ~/.ssh/authorized_keys
+
+# enable ssh
+if ! command -v ssh >/dev/null 2>&1 
+then
+    echo "Installing SSH"
+    apt install ssh -y
+    echo "Installing SSH... Done"
+    exit 1
+else
+    echo "SSH is installed, moving on."
+    exit 1
+fi
 systemctl start ssh.service
 systemctl enable ssh.service
-# Get Qemu-guest-agent #
+
+# Get admin pubkey
+file="$HOME/.ssh/authorized_keys"
+echo "Grabbing newest keys..."
+key=$(curl -fsSL "raw.githubusercontent.com/thataudiobug/frankenas/refs/heads/main/pubkey") || {
+    echo "Failed to download keys... shitting the bed"
+    exit 1
+}
+echo "Grabbing newest keys... Done"
+touch "$file"
+echo "Removing old keys..."
+rm "$file"
+echo "Removing old keys... Done"
+echo "Installing new keys..."
+echo "$key" >> "$file"
+echo "Installing new keys... Done"
+
+# Get qemu-guest-agent
 apt-get install qemu-guest-agent
 systemctl start qemu-guest-agent
 systemctl enable qemu-guest-agent
-# create smb directories #
+
+# Create smb directories
 mkdir /mnt/media
 mkdir /mnt/config
-# Get SMB user creds #
+
+# Ask human for SMB user creds
 CRED_FILE="/home/.smbcredentials"
 read -p 'Please enter the SMB connection Username: ' SMB_USER
 read -sp 'Please enter the SMB connection password: ' SMB_PASS
@@ -20,29 +64,36 @@ echo "username=$SMB_USER" >> "$CRED_FILE"
 echo "password=$SMB_PASS" >> "$CRED_FILE"
 chmod 600 "$CRED_FILE"
 echo "Credentails save... Done."
-# setup smb connections #
+
+# setup smb connections
 echo "//192.168.1.100/essek/media /mnt/media cifs credentials=/home/username/.smbcredentials,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
 echo "//192.168.1.100/caleb/docker/configs /mnt/configs cifs credentials=/home/username/.smbcredentials,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
-# Mount volumes #
+
+# Mount volumes
 systemctl daemon-reload
 mount -a
-# Add Docker's official GPG key: #
+
+# Add Docker's official GPG key
 apt-get update
 apt-get install -y ca-certificates curl
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 chmod a+r /etc/apt/keyrings/docker.asc
-# Add the repository to Apt sources:
+
+# Add the repository to Apt sources
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
   $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
   tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update
+
 # Install docker-ce
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-#install portainer
+
+# install portainer
 docker volume create portainer_data
 docker run -d -p 8000:8000 -p 9443:9443 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
+
 # Install Prowlarr
 docker run -d \
   --name=prowlarr \
@@ -53,6 +104,7 @@ docker run -d \
   -v /mnt/config/prowlarr:/config \
   --restart unless-stopped \
   linuxserver/prowlarr:latest
+
 # Install Radarr
 docker run -d \
   --name=radarr \
@@ -65,6 +117,7 @@ docker run -d \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
   linuxserver/radarr:latest
+
 # Install Sonarr
 docker run -d \
   --name=sonarr \
@@ -77,6 +130,7 @@ docker run -d \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
   linuxserver/sonarr:latest
+
 # Install Lidarr
 docker run -d \
   --name=lidarr \
@@ -89,7 +143,8 @@ docker run -d \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
   linuxserver/lidarr:latest
-  # Install qbittorrent
+
+# Install qbittorrent
 docker run -d \
   --name=qbittorrent \
   -e PUID=1000 \
@@ -104,6 +159,7 @@ docker run -d \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
   linuxserver/qbittorrent:latest
-# Get PIA #
+
+# Get PIA
 curl https://installers.privateinternetaccess.com/download/pia-linux-3.7-08412.run
 sh pia-linux-3.7-08412.run
