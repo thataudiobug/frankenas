@@ -13,7 +13,7 @@ else
     echo "Curl is installed, moving on."
 fi
 
-# enable ssh
+# Enable ssh
 if ! command -v ssh >/dev/null 2>&1 
 then
     echo "Installing SSH"
@@ -42,14 +42,15 @@ echo "$key" >> "$file"
 echo "Installing new keys... Done"
 
 # Get qemu-guest-agent
-apt-get install qemu-guest-agent -y
+apt-get install -y qemu-guest-agent 
 systemctl start qemu-guest-agent
 systemctl enable qemu-guest-agent
+echo "Installing qemu-guest-agent... Done"
 
 # Create smb directories
 mkdir /mnt/media
 mkdir /mnt/config
-
+echo "Creating SMB folders... Done"
 # Ask human for SMB user creds
 CRED_FILE="/home/.smbcredentials"
 read -p 'Please enter the SMB connection Username: ' SMB_USER
@@ -57,15 +58,17 @@ read -sp 'Please enter the SMB connection password: ' SMB_PASS
 echo "username=$SMB_USER" >> "$CRED_FILE" 
 echo "password=$SMB_PASS" >> "$CRED_FILE"
 chmod 600 "$CRED_FILE"
-echo "Credentails save... Done."
+echo "SMB credentails save... Done."
 
-# setup smb connections
+# Setup smb connections
 echo "//192.168.1.100/essek/media /mnt/media cifs credentials=/home/username/.smbcredentials,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
 echo "//192.168.1.100/caleb/docker/configs /mnt/configs cifs credentials=/home/username/.smbcredentials,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
+echo "Adding fstab entries... Done"
 
 # Mount volumes
 systemctl daemon-reload
 mount -a
+echo "Mounting directories... Done"
 
 # Add Docker's official GPG key
 apt-get update
@@ -73,6 +76,7 @@ apt-get install -y ca-certificates
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 chmod a+r /etc/apt/keyrings/docker.asc
+echo "Adding Docker GPG key... Done"
 
 # Add the repository to Apt sources
 echo \
@@ -80,13 +84,16 @@ echo \
   $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
   tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update
+echo "Adding Docker Apt source... Done"
 
-# Install docker-ce
+# Install Docker-ce
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+echo "Installing Docker... Done"
 
-# install portainer
+# Install Portainer
 docker volume create portainer_data
 docker run -d -p 8000:8000 -p 9443:9443 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
+echo "Installing Portainer... Done"
 
 # Install Prowlarr
 docker run -d \
@@ -98,6 +105,7 @@ docker run -d \
   -v /mnt/config/prowlarr:/config \
   --restart unless-stopped \
   linuxserver/prowlarr:latest
+echo "Installing Prowlarr... Done"
 
 # Install Radarr
 docker run -d \
@@ -111,6 +119,7 @@ docker run -d \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
   linuxserver/radarr:latest
+echo "Installing Radarr... Done"
 
 # Install Sonarr
 docker run -d \
@@ -124,6 +133,7 @@ docker run -d \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
   linuxserver/sonarr:latest
+echo "Installing Sonarr... Done"
 
 # Install Lidarr
 docker run -d \
@@ -137,6 +147,7 @@ docker run -d \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
   linuxserver/lidarr:latest
+echo "Installing Lidarr... Done"
 
 # Install qbittorrent
 docker run -d \
@@ -153,7 +164,9 @@ docker run -d \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
   linuxserver/qbittorrent:latest
+echo "Installing Qbit... Done"
 
-# Get PIA
+# Installing PIA VPN
 curl https://installers.privateinternetaccess.com/download/pia-linux-3.7-08412.run
 sh pia-linux-3.7-08412.run
+echo "Installing PIA... Done"
