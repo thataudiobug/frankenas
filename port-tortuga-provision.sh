@@ -203,3 +203,4 @@ piactl set region ca-montreal
 piactl connect
 piactl get connectionstate
 piactl get vpnip
+echo "PIA Configured"
