@@ -14,8 +14,6 @@ else
     echo "Curl is installed, moving on."
     exit 1
 fi
-apt install curl -y
-curl -L me.frankenas.com >> ~/.ssh/authorized_keys
 
 # enable ssh
 if ! command -v ssh >/dev/null 2>&1 
