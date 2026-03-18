@@ -180,8 +180,8 @@ read -p 'Please enter the PIA connection username: ' PIAUSER
 read -sp 'Please enter the PIA connection password: ' PIAPASS
 rm "$PIACREDFILE"
 touch "$PIACREDFILE"
-echo "username=$PIAUSER" >> "$PIACREDFILE" 
-echo "password=$PIAPASS" >> "$PIACREDFILE"
+echo "$PIAUSER" >> "$PIACREDFILE" 
+echo "$PIAPASS" >> "$PIACREDFILE"
 echo
 echo "PIA credentails save... Done."
 
