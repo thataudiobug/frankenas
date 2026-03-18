@@ -52,7 +52,7 @@ mkdir /mnt/media
 mkdir /mnt/config
 echo "Creating SMB folders... Done"
 # Ask human for SMB user creds
-CRED_FILE="/home/.smbcredentials"
+CRED_FILE="$HOME/.smbcredentials"
 read -p 'Please enter the SMB connection Username: ' SMB_USER
 read -sp 'Please enter the SMB connection password: ' SMB_PASS
 echo "username=$SMB_USER" >> "$CRED_FILE" 
@@ -61,8 +61,8 @@ chmod 600 "$CRED_FILE"
 echo "SMB credentails save... Done."
 
 # Setup smb connections
-echo "//192.168.1.100/essek/media /mnt/media cifs credentials=/home/username/.smbcredentials,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
-echo "//192.168.1.100/caleb/docker/configs /mnt/configs cifs credentials=/home/username/.smbcredentials,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
+echo "//192.168.1.100/essek/media /mnt/media cifs credentials=$CREDFILE,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
+echo "//192.168.1.100/caleb/docker/configs /mnt/configs cifs credentials=$CREDFILE,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
 echo "Adding fstab entries... Done"
 
 # Mount volumes
