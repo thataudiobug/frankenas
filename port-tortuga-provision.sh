@@ -71,7 +71,7 @@ echo "SMB credentails save... Done."
 
 # Setup smb connections
 echo "//192.168.1.100/essek/media /mnt/media cifs credentials=$CREDFILE,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
-echo "//192.168.1.100/caleb/docker/config /mnt/config cifs credentials=$CREDFILE,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
+echo "//192.168.1.100/caleb/docker/configs /mnt/config cifs credentials=$CREDFILE,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
 echo "Adding fstab entries... Done"
 
 # Mount volumes
