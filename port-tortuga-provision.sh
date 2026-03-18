@@ -197,8 +197,8 @@ chmod 777 pia-linux-3.7-08412.run
 echo "Installing PIA... Done"
 
 # Initialize PIA VPN
-piactl login $PIACREDFILE
 piactl background enable
+piactl login $PIACREDFILE
 piactl set region ca-montreal
 piactl connect
 piactl get connectionstate
