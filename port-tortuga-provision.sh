@@ -9,10 +9,8 @@ then
     echo "Installing Curl"
     apt install curl -y
     echo "Installing Curl... Done"
-    exit 1
 else
     echo "Curl is installed, moving on."
-    exit 1
 fi
 
 # enable ssh
@@ -21,10 +19,8 @@ then
     echo "Installing SSH"
     apt install ssh -y
     echo "Installing SSH... Done"
-    exit 1
 else
     echo "SSH is installed, moving on."
-    exit 1
 fi
 systemctl start ssh.service
 systemctl enable ssh.service
@@ -33,7 +29,7 @@ systemctl enable ssh.service
 file="$HOME/.ssh/authorized_keys"
 echo "Grabbing newest keys..."
 key=$(curl -fsSL "raw.githubusercontent.com/thataudiobug/frankenas/refs/heads/main/pubkey") || {
-    echo "Failed to download keys... shitting the bed"
+    echo "Failed to download user SSH keys... shitting the bed"
     exit 1
 }
 echo "Grabbing newest keys... Done"
