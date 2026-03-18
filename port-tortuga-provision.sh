@@ -1,13 +1,31 @@
 #!/bin/bash
 # Get Updates #
 apt-get update && apt-get upgrade -y
+# enable ssh #
+apt install ssh -y
+systemctl start ssh.service
+systemctl enable ssh.service
 # Get Qemu-guest-agent #
 apt-get install qemu-guest-agent
 systemctl start qemu-guest-agent
 systemctl enable qemu-guest-agent
-# Get PIA #
-curl https://installers.privateinternetaccess.com/download/pia-linux-3.7-08412.run
-sh pia-linux-3.7-08412.run
+# create smb directories #
+mkdir /mnt/media
+mkdir /mnt/config
+# Get SMB user creds #
+CRED_FILE="/home/.smbcredentials"
+read -p 'Please enter the SMB connection Username: ' SMB_USER
+read -sp 'Please enter the SMB connection password: ' SMB_PASS
+echo "username=$SMB_USER" >> "$CRED_FILE" 
+echo "password=$SMB_PASS" >> "$CRED_FILE"
+chmod 600 "$CRED_FILE"
+echo "Credentails save... Done."
+# setup smb connections #
+echo "//192.168.1.100/essek/media /mnt/media cifs credentials=/home/username/.smbcredentials,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
+echo "//192.168.1.100/caleb/docker/configs /mnt/configs cifs credentials=/home/username/.smbcredentials,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,iocharset=utf8,nounix,noserverino 0 0" | tee -a /etc/fstab > /dev/null
+# Mount volumes #
+systemctl daemon-reload
+mount -a
 # Add Docker's official GPG key: #
 apt-get update
 apt-get install -y ca-certificates curl
@@ -86,3 +104,6 @@ docker run -d \
   -v /mnt/media/downloads:/downloads \
   --restart unless-stopped \
   linuxserver/qbittorrent:latest
+# Get PIA #
+curl https://installers.privateinternetaccess.com/download/pia-linux-3.7-08412.run
+sh pia-linux-3.7-08412.run
