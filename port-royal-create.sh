@@ -81,7 +81,7 @@ pct start $var_cid
 echo "Starting container... Done"
 
 # Provision basics
-pct exec $var_cid -- bash -c "
+pct exec $var_cid -- bash -c '
   echo "Fetching updates..." && \
   apt update && \
   echo "Fetching updates... Done" && \
@@ -99,6 +99,6 @@ pct exec $var_cid -- bash -c "
   echo "Setting script pemrs... Done" && \
   echo "Running provisioning script... Done" && \
   ./script.sh && \
-  echo "Running provisioning script... Done"  "
+  echo "Running provisioning script... Done"  '
 
 echo "Build complete! Please come again."
