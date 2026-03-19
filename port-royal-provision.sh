@@ -10,6 +10,11 @@ install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 chmod a+r /etc/apt/keyrings/docker.asc
 
+# adding users
+echo "Adding data group..."
+groupadd -g 102222 data
+usermod -aG data root
+
 echo "Adding apt repo... "
 # Add the repository to Apt sources:
 echo \
@@ -59,9 +64,13 @@ docker run -d \
   -e PUID=1000 \
   -e PGID=1000 \
   -e TZ=Etc/UTC \
-  -p 443:443 \
-  -v /path/to/nextcloud/config:/config \
-  -v /path/to/data:/data \
+  -p 6549:6549 \
+  -v /mnt/config:/config \
+  -v /yasha/nextcloud:/data \
+  -v /caleb:/caleb \
+  -v /essek:/essek \
+  -v /nott:/nott \
+  -v /yasha:/yasha \
   --restart unless-stopped \
   lscr.io/linuxserver/nextcloud:latest
 
