@@ -70,8 +70,8 @@ pct create $var_cid local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
   --mp5 /Caleb,mp=/mnt/caleb
 
 # set timestamp
-var_time_local= date "+%Y-%m-%d %H:%M:%S" > /dev/null
-var_time_utc= TZ=UTC date "+%Y-%m-%d %H:%M:%S" > /dev/null
+var_time_local= date "+%Y-%m-%d %H:%M:%S"
+var_time_utc= TZ=UTC date "+%Y-%m-%d %H:%M:%S"
 pct set $var_cid \
   --description "This container was last rebuilt on $var_time_UTC UTC, $var_time_local local."
 
