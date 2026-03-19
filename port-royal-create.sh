@@ -49,7 +49,7 @@ do
 done
 
 # Build the CT
-pct create $var_cid local:vztmpl/ubuntu-24.04-standard_24.04-1_amd64.tar.zst \
+pct create $var_cid local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
   --hostname $var_name \
   --cores $var_cpus \
   --memory $var_mem \
