@@ -56,3 +56,5 @@ docker run -d \
   -v /path/to/data:/data \
   --restart unless-stopped \
   lscr.io/linuxserver/nextcloud:latest
+
+
