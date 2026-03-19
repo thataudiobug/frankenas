@@ -80,20 +80,25 @@ echo "Starting container..."
 pct start $var_cid
 echo "Starting container... Done"
 
-# Jump into CT
-echo "Connection to container... "
-pct enter $var_cid
-echo "Connecting to container... Done"
-
 # Provision basics
-apt update
-apt upgrade -y
-apt install curl -y
+pct exec $var_cid -- bash -c "
+  echo "Fetching updates..." && \
+  apt update && \
+  echo "Fetching updates... Done" && \
+  echo "Installing updates..." && \
+  apt upgrade -y && \
+  echo "Installing updates... Done" && \
+  echo "Installing curl... " && \
+  apt install curl -y && \
+  echo "Installing curl... Done" && \
+  echo "Fetching provisioning script... " && \
+  curl -ofsSL script.sh https://github.com/thataudiobug/frankenas/blob/main/port-royal-provision.sh && \
+  echo "Fetching provisioning script... Done" && \
+  echo "Setting script perms... " && \
+  chmod 777 script.sh && \
+  echo "Setting script pemrs... Done" && \
+  echo "Running provisioning script... Done" && \
+  ./script.sh && \
+  echo "Running provisioning script... Done"  "
 
-# Pull and run provisioning script
-curl -ofsSL script.sh https://github.com/thataudiobug/frankenas/blob/main/port-royal-provision.sh
-chmod 777 script.sh
-./script.sh
-
-echo "Provisioning... Done"
-exit
+echo "Build complete! Please come again."
