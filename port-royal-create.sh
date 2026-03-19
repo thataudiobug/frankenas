@@ -48,6 +48,7 @@ do
     esac
 done
 
+# Build the CT
 pct create $var_cid local:vztmpl/ubuntu-24.04-standard_24.04-1_amd64.tar.zst \
   --hostname $var_name \
   --cores $var_cpus \
@@ -66,4 +67,11 @@ pct create $var_cid local:vztmpl/ubuntu-24.04-standard_24.04-1_amd64.tar.zst \
   --mp2 /essek,mp=/mnt/essek \
   --mp3 /Nott,mp=/mnt/nott \
   --mp4 /Yasha,mp=/mnt/yasha \
-  --mp5 /Caleb,mp=/mnt/caleb \
+  --mp5 /Caleb,mp=/mnt/caleb
+
+# Get time
+var_time_local= date "+%Y-%m-%d %H:%M:%S"
+var_time_utc= TZ=UTC date "+%Y-%m-%d %H:%M:%S"
+
+pct set $var_cid \
+  --description "This container was last rebuilt on $var_time_UTC UTC, $var_time_local local."
