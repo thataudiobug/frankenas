@@ -75,5 +75,25 @@ var_time_utc= TZ=UTC date "+%Y-%m-%d %H:%M:%S" > /dev/null
 pct set $var_cid \
   --description "This container was last rebuilt on $var_time_UTC UTC, $var_time_local local."
 
+# Start CT
+echo "Starting container..."
 pct start $var_cid
+echo "Starting container... Done"
 
+# Jump into CT
+echo "Connection to container... "
+pct enter $var_cid
+echo "Connecting to container... Done"
+
+# Provision basics
+apt update
+apt upgrade -y
+apt install curl -y
+
+# Pull and run provisioning script
+curl -ofsSL script.sh https://github.com/thataudiobug/frankenas/blob/main/port-royal-provision.sh
+chmod 777 script.sh
+./script.sh
+
+echo "Provisioning... Done"
+exit
