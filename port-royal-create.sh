@@ -92,7 +92,7 @@ pct exec $var_cid -- bash -c '
   apt install curl -y && \
   echo "Installing curl... Done" && \
   echo "Fetching provisioning script... " && \
-  curl -ofsSL script.sh https://github.com/thataudiobug/frankenas/blob/main/port-royal-provision.sh && \
+  curl -o script.sh https://raw.githubusercontent.com/thataudiobug/frankenas/refs/heads/main/port-royal-provision.sh && \
   echo "Fetching provisioning script... Done" && \
   echo "Setting script perms... " && \
   chmod 777 script.sh && \
