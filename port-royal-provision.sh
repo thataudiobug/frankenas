@@ -12,7 +12,7 @@ chmod a+r /etc/apt/keyrings/docker.asc
 
 # adding users
 echo "Adding data group..."
-groupadd -g 102222 data
+groupadd -g 2222 data
 usermod -aG data root
 
 echo "Adding apt repo... "
@@ -66,11 +66,11 @@ docker run -d \
   -e TZ=Etc/UTC \
   -p 6549:6549 \
   -v /mnt/config:/config \
-  -v /yasha/nextcloud:/data \
-  -v /caleb:/caleb \
-  -v /essek:/essek \
-  -v /nott:/nott \
-  -v /yasha:/yasha \
+  -v /mnt/yasha/nextcloud:/data \
+  -v /mnt/caleb:/caleb \
+  -v /mnt/essek:/essek \
+  -v /mnt/nott:/nott \
+  -v /mnt/yasha:/yasha \
   --restart unless-stopped \
   lscr.io/linuxserver/nextcloud:latest
 
