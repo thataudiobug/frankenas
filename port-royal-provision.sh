@@ -64,7 +64,7 @@ docker run -d \
   -e PUID=1000 \
   -e PGID=1000 \
   -e TZ=Etc/UTC \
-  -p 6549:6549 \
+  -p 443:6549 \
   -v /mnt/config:/config \
   -v /mnt/yasha/nextcloud:/data \
   -v /mnt/caleb:/caleb \
