@@ -40,7 +40,7 @@ docker run -d \
   -p 81:81 \
   -p 443:443 \
   -v /mnt/config/npm/data:/data \
-  -v /mnt/config/npm/letsencrypt:/letsencrypt \
+  -v /mnt/config/npm/letsencrypt:/etc/letsencrypt \
   --restart unless-stopped \
   jc21/nginx-proxy-manager:latest
 
