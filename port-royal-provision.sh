@@ -57,15 +57,6 @@ docker run -d \
   --restart unless-stopped \
   linuxserver/ombi:latest
 
-echo "installing Actual Budget..."
-docker run -d \
-  --name=budget \
-  -p 5006:5006 \
-  -v /mnt/config/budget:/data \
-  --restart unless-stopped \
-  actualbudget/actual-server:latest
-
-
 echo "Installing Nextcloud... "
 # Install Nextcloud
 docker run -d \
