@@ -1,12 +1,24 @@
-# Grab Curl amd install Jellyfin #
-apt install curl -y
-curl https://repo.jellyfin.org/install-debuntu.sh | bash
-# Pull renderer ID and set perms ie: = render:x:108:jellyfin #
-cat /etc/group
-usermod -aG render jellyfin
-# Install Intel Drivers #
+# Basic updates
+apt update && apt upgrade -y
+
+# Adding users
+echo "Adding data group..."
+groupadd -g 2222 data
+usermod -aG data root
+
+# Grab curl, gnupg, and intel stuff
+apt install curl gnupg -y
 apt install -y intel-opencl-icd
 
-# check current codecs #
-/usr/lib/jellyfin-ffmpeg/vainfo --display drm --device /dev/dri/renderD128
+# Install Jellyfin
+curl https://repo.jellyfin.org/install-debuntu.sh | SKIP_CONFIRM="true" bash
 
+# Stop jellyfin for perms adjustments
+systemctl stop jellyfin.service
+
+# Verify Jellyfin perms
+usermod -aG data jellyfin
+usermod -aG render jellyfin
+
+systemctl start jellyfin.service
+systemctl enable jellyfin.service
