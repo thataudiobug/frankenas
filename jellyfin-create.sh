@@ -100,7 +100,7 @@ var_renderer=$(pct exec $var_cid -- bash -c 'getent group render | cut -d: -f3')
 # add transcoding links
 echo "lxc.cgroup2.devices.allow: c 226:128 rwm" >> /etc/pve/lxc/$var_cid.conf
 echo "lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=fi>" >> /etc/pve/lxc/$var_cid.conf
-echo "lxc.hook.pre-start: sh -c \"chown 100000:10${var_renderer} /dev/dri/renderD128\"" >> /etc/pve/lxc/${var_cid}.conf
+echo "lxc.hook.pre-start: sh -c \"chown 100000:100${var_renderer} /dev/dri/renderD128\"" >> /etc/pve/lxc/${var_cid}.conf
 
 pct reboot $var_cid
 
