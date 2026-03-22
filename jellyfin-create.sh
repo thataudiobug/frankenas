@@ -95,7 +95,7 @@ pct exec $var_cid -- bash -c '
 echo "Provisioning script... Done"
 
 # Pull renderer ID and set perms ie: = render:x:108:jellyfin #
-var_renderer=$(pct exec $var_cid -- bash -c getent group render | cut -d: -f3)
+var_renderer=$(pct exec $var_cid -- bash -c 'getent group render | cut -d: -f3')
 
 # add transcoding links
 echo "lxc.cgroup2.devices.allow: c 226:128 rwm" >> /etc/pve/lxc/$var_cid.conf
