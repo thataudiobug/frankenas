@@ -105,7 +105,7 @@ echo "lxc.hook.pre-start: sh -c \"chown 100000:10${var_renderer} /dev/dri/render
 pct reboot $var_cid
 
 # check current codecs #
-pct exec -- bash -c ' /usr/lib/jellyfin-ffmpeg/vainfo --display drm --device /dev/dri/renderD128 '
+pct exec $var_cid -- bash -c ' /usr/lib/jellyfin-ffmpeg/vainfo --display drm --device /dev/dri/renderD128 '
 
 echo "Build complete! Please come again."
 
