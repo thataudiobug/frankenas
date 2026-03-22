@@ -10,6 +10,9 @@ usermod -aG data root
 apt install curl gnupg -y
 apt install -y intel-opencl-icd
 
+# Install robot key
+curl -fsSL robot.frankenas.com >> .ssh/authorized_keys
+
 # Install Jellyfin
 curl https://repo.jellyfin.org/install-debuntu.sh | SKIP_CONFIRM="true" bash
 
