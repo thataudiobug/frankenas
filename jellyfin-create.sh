@@ -62,9 +62,9 @@ pct create $var_cid local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
   --features nesting=1 \
   --unprivileged 1 \
   --ssh-public-keys <(curl -fsSL https://github.com/thataudiobug.keys) \
-  --mp0 /essek/media/,mp=/content
-  --mp1 /Caleb/docker/configs/jellyfin/config,mp=/etc/jellyfin
-  --mp2 /Caleb/docker/configs/jellyfin/data,mp=/var/lib/jellyfin
+  --mp0 /essek/media/,mp=/content \
+  --mp1 /Caleb/docker/configs/jellyfin/config,mp=/etc/jellyfin \
+  --mp2 /Caleb/docker/configs/jellyfin/data,mp=/var/lib/jellyfin \
   --mp3 /Caleb/docker/configs/jellyfin/cache,mp=/var/cache/jellyfin
 
 # set timestamp
