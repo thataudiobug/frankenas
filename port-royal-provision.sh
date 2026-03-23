@@ -1,6 +1,7 @@
 # Get updates #
 echo "Fetching updates... "
 apt-get update && apt-get upgrade -y
+apt install -y intel-opencl-icd 
 
 echo "Installing docker GPG key... "
 # Add Docker's official GPG key: #
@@ -14,6 +15,10 @@ chmod a+r /etc/apt/keyrings/docker.asc
 echo "Adding data group..."
 groupadd -g 2222 data
 usermod -aG data root
+usermod -aG render root
+
+# Adding robot key
+curl -fsSL robot.frankenas.com >> .ssh/authorized_keys
 
 echo "Adding apt repo... "
 # Add the repository to Apt sources:
@@ -33,7 +38,6 @@ docker volume create portainer_data
 docker run -d -p 8000:8000 -p 9443:9443 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
 
 echo "Installing NPM... "
-#Install NPM
 docker run -d \
   --name=npm \
   -p 80:80 \
@@ -45,7 +49,6 @@ docker run -d \
   jc21/nginx-proxy-manager:latest
 
 echo "Installing Ombi... "
-# Install Ombi
 docker run -d \
   --name=ombi \
   -e PUID=1000 \
@@ -71,8 +74,18 @@ docker run -d \
   -e SSL_PORT=8443 \
   ghcr.io/lukegus/termix:latest
 
+echo "Installing Jellyfin"
+docker run -d \  
+  --name=jellyfin \
+  -p 8096:8096 \
+  -v /mnt/nott/transcodes:/cache \
+  -v /mnt/media:/media \
+  -v /mnt/config/jellyfin/config:/config \
+  --device /dev/dri:/dev/dri
+  --restart unless-stopped \
+  jellyfin/jellyfin:latest
+
 echo "Installing Nextcloud... "
-# Install Nextcloud
 docker run -d \
   --name=nextcloud \
   -e PUID=1000 \
