@@ -3,8 +3,8 @@ echo "Welcome to Casey's Port Royal LXC spinnup script."
 
 # Default vars
 var_name="port-royal"
-var_cpus="2"
-var_mem="4096"
+var_cpus="6"
+var_mem="8192"
 var_swap="512"
 var_fsvol="caleb"
 var_fsgb="8"
@@ -62,6 +62,7 @@ pct create $var_cid local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
   --features nesting=1 \
   --unprivileged 1 \
   --ssh-public-keys <(curl -fsSL https://github.com/thataudiobug.keys) \
+  --ssh-public-keys <(curl -fsSL https://raw.githubusercontent.com/thataudiobug/frankenas/refs/heads/main/robot.key) \
   --mp0 /essek/media,mp=/mnt/media \
   --mp1 /Caleb/docker/configs,mp=/mnt/config \
   --mp2 /essek,mp=/mnt/essek \
@@ -73,32 +74,36 @@ pct create $var_cid local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
 var_time_local= date "+%Y-%m-%d %H:%M:%S" > /dev/null
 var_time_utc= TZ=UTC date "+%Y-%m-%d %H:%M:%S" > /dev/null
 pct set $var_cid \
-  --description "This container was last rebuilt on $var_time_UTC UTC, $var_time_local local."
+  --description "This container was last rebuilt on $var_time_utz UTC, $var_time_local local."
 
 # Start CT
 echo "Starting container..."
 pct start $var_cid
-echo "Starting container... Done"
 
 # Provision basics
 pct exec $var_cid -- bash -c '
   echo "Fetching updates..." && \
   apt update && \
-  echo "Fetching updates... Done" && \
   echo "Installing updates..." && \
   apt upgrade -y && \
-  echo "Installing updates... Done" && \
   echo "Installing curl... " && \
   apt install curl -y && \
-  echo "Installing curl... Done" && \
   echo "Fetching provisioning script... " && \
   curl -o script.sh https://raw.githubusercontent.com/thataudiobug/frankenas/refs/heads/main/port-royal-provision.sh && \
-  echo "Fetching provisioning script... Done" && \
   echo "Setting script perms... " && \
   chmod 777 script.sh && \
-  echo "Setting script pemrs... Done" && \
   echo "Running provisioning script... Done" && \
   ./script.sh && \
   echo "Running provisioning script... Done"  '
+
+# Pull renderer ID and set perms ie: = render:x:108:jellyfin #
+var_renderer=$(pct exec $var_cid -- bash -c 'getent group render | cut -d: -f3')
+
+# Add transcoding links
+echo "lxc.cgroup2.devices.allow: c 226:128 rwm" >> /etc/pve/lxc/$var_cid.conf
+echo "lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=file" >> /etc/pve/lxc/$var_cid.conf
+echo "lxc.hook.pre-start: sh -c \"chown 100000:100${var_renderer} /dev/dri/renderD128\"" >> /etc/pve/lxc/${var_cid}.conf
+
+pct reboot $var_cid
 
 echo "Build complete! Please come again."
