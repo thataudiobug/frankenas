@@ -65,13 +65,13 @@ echo "Installing Termix"
 docker run -d \
   --name=bastion \
   --restart=unless-stopped \
-  -p 8080:8080 \
   -p 8443:8443 \
   -v /mnt/config/termix:/app/data \
   -e PUID=1000 \
   -e GUID=1000 \
-  -e SSL_ENABLED=true \
-  -e PORT=8080 \
+  -e ENABLE_SSL=true \
+  -e SSL_KEY_PATH=/app/data/ssl/termix.key \
+  -e SSL_CERT_PATH=/app/data/ssl/termix.crt \
   -e SSL_PORT=8443 \
   ghcr.io/lukegus/termix:latest
 
