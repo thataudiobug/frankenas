@@ -76,7 +76,7 @@ docker run -d \
   ghcr.io/lukegus/termix:latest
 
 echo "Installing Jellyfin"
-docker run -d \  
+docker run -d \
   --name=jellyfin \
   -p 8096:8096 \
   -v /mnt/nott/transcodes:/cache \
@@ -84,7 +84,7 @@ docker run -d \
   -v /mnt/config/jellyfin/config:/config \
   --device /dev/dri:/dev/dri \
   --restart unless-stopped \
-  jellyfin/jellyfin:latest
+  jellyfin/jellyfin
 
 echo "Installing Nextcloud... "
 docker run -d \
