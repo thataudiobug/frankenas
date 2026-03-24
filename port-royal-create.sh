@@ -81,6 +81,7 @@ echo "Starting container..."
 pct start $var_cid
 
 # Provision basics
+echo "Provisioning container... "
 pct exec $var_cid -- bash -c '
   echo "Fetching updates..." && \
   apt update && \
@@ -92,18 +93,22 @@ pct exec $var_cid -- bash -c '
   curl -o script.sh https://raw.githubusercontent.com/thataudiobug/frankenas/refs/heads/main/port-royal-provision.sh && \
   echo "Setting script perms... " && \
   chmod 777 script.sh && \
-  echo "Running provisioning script... Done" && \
+  echo "Running provisioning script..." && \
   ./script.sh && \
   echo "Running provisioning script... Done"  '
 
 # Pull renderer ID and set perms ie: = render:x:108:jellyfin #
+echo "Fetching render gid"
 var_renderer=$(pct exec $var_cid -- bash -c 'getent group render | cut -d: -f3')
 
 # Add transcoding links
+echo "adding gpu passthrough options to LXC"
 echo "lxc.cgroup2.devices.allow: c 226:128 rwm" >> /etc/pve/lxc/$var_cid.conf
 echo "lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=file" >> /etc/pve/lxc/$var_cid.conf
 echo "lxc.hook.pre-start: sh -c \"chown 100000:100${var_renderer} /dev/dri/renderD128\"" >> /etc/pve/lxc/${var_cid}.conf
 
+# Reboot PCT
+echo "Rebooting PCT"
 pct reboot $var_cid
 
 echo "Build complete! Please come again."
