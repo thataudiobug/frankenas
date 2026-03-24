@@ -18,6 +18,7 @@ usermod -aG data root
 usermod -aG render root
 
 # Adding robot key
+echo "Adding robot key"
 curl -fsSL robot.frankenas.com >> .ssh/authorized_keys
 
 echo "Adding apt repo... "
@@ -81,7 +82,7 @@ docker run -d \
   -v /mnt/nott/transcodes:/cache \
   -v /mnt/media:/media \
   -v /mnt/config/jellyfin/config:/config \
-  --device /dev/dri:/dev/dri
+  --device /dev/dri:/dev/dri \
   --restart unless-stopped \
   jellyfin/jellyfin:latest
 
@@ -101,4 +102,4 @@ docker run -d \
   --restart unless-stopped \
   lscr.io/linuxserver/nextcloud:latest
 
-echo "provisioning complete!"
+echo "provisioning script complete!"
