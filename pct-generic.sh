@@ -1,3 +1,4 @@
+#!/bin/bash
 echo "Welcome to Casey's geenric LXC spinnup script."
 
 # Default vars
