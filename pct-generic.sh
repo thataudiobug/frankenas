@@ -19,8 +19,20 @@ read -p 'Please enter the CT name: ' var_name
 read -p 'Please enter the CPU count: ' var_cpus
 read -p 'Please enter the memory in MBs: ' var_mem
 read -p 'Please enter the swap in MBs: ' var_swap
-echo 'Please select which drive the pct should live on: '
-select var_fsvol in "Nott" "caleb" 
+echo "Please select which drive the pct should live on: "
+select var_where_fsvol in "Nott" "caleb"
+do
+    case $var_where_fsvol in
+        Nott) 
+          var_fsvol="Nott"
+          break
+          ;;
+        caleb)
+          var_fsvol="caleb"
+          break
+          ;;
+    esac
+done
 read -p 'Please enter the root file system size in GBs: ' var_fsgb
 
 
@@ -39,7 +51,7 @@ do
     case $var_install_type in
         None) break;;
         Networking) 
-          config_network break;)
+          config_network break;;
     esac
 done
 
