@@ -17,11 +17,10 @@ echo "Robot Key Setup... Done"
 
 echo "Point Github at the Robot Key"
 cat > ~/.ssh/config << EOF
-Host github
-    HostName github.com
+Host github.com
     IdentityFile ~/.ssh/id_robot
 EOF
-
+chmod 600 ~/.ssh/config
 
 echo "Requesting Vault Secrets"
 VAULTKEYFILE="~/secrets/keyfile"
