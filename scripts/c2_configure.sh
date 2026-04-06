@@ -15,4 +15,5 @@ rm "$VAULTKEYFILE"
 touch "$VAULTKEYFILE"
 echo "$SSHKEY" >> "$VAULTKEYFILE" 
 echo
+chmod 600 $VAULTKEYFILE
 echo "Secrets setup... Done"
