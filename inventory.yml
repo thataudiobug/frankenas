@@ -1,12 +1,14 @@
 droplets:
   hosts:
     c2_ib_cmh_01:
-      ansible_host: 192.168.1.101
+      id: 101
     port_royal:
-      ansible_host: 192.168.1.103
+      id: 103
     port_tortuga:
-      ansible_host: 192.168.1.104
+      id: 104
       ansible_user: casey
+  vars:
+    ansible_host: "192.168.1.{{id}}"
 
 dockers:
   hosts:
