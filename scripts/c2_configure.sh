@@ -1,5 +1,4 @@
 #!/bin/bash
-
 echo "Getting Updates"
 apt update && apt upgrade -y
 
