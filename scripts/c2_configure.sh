@@ -9,7 +9,7 @@ echo "Cloneing repo"
 git clone git@github.com:thataudiobug/frankenas.git
 
 echo "Requesting secrets"
-VAULTKEYFILE="$home/vault/keyfile"
+VAULTKEYFILE="$home/secrets/keyfile"
 read -ps 'Please paste the vault key: ' SSHKEY
 rm "$VAULTKEYFILE"
 touch "$VAULTKEYFILE"
