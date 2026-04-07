@@ -1,0 +1,80 @@
+---
+- name: Advanced container configuration
+  hosts: docker_hosts
+  become: true
+
+  tasks:
+    - name: Create a data directory on the host
+      ansible.builtin.file:
+        path: /opt/app-data
+        state: directory
+        mode: '0755'
+
+    - name: Create a custom index page on the host
+      ansible.builtin.copy:
+        content: |
+          <html><body><h1>Served by Nginx inside Docker</h1>
+          <p>Managed by Ansible</p></body></html>
+        dest: /opt/app-data/index.html
+
+    - name: Deploy container with full configuration
+      community.docker.docker_container:
+        name: app-container
+        image: nginx:stable-alpine
+        state: started
+        ports:
+          - "8081:80"
+        env:
+          APP_ENV: production
+          LOG_LEVEL: info
+          DB_HOST: 192.168.1.100
+        volumes:
+          - /opt/app-data:/usr/share/nginx/html:ro
+        restart_policy: unless-stopped
+        memory: 256m
+        cpus: 0.5
+        healthcheck:
+          test: ["CMD-SHELL", "wget -q --spider http://localhost || exit 1"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+          start_period: 10s
+
+    - name: Verify the custom page is served
+      ansible.builtin.uri:
+        url: http://localhost:8081
+        return_content: true
+      register: custom_page
+
+    - name: Show the custom page content
+      ansible.builtin.debug:
+        msg: "{{ custom_page.content | trim }}"
+
+    - name: Execute a command inside the container
+      community.docker.docker_container_exec:
+        container: app-container
+        command: /bin/sh -c "nginx -v 2>&1"
+      register: exec_result
+
+    - name: Show Nginx version from inside container
+      ansible.builtin.debug:
+        msg: "{{ exec_result.stdout }}"
+
+    - name: Copy a config file into the container
+      community.docker.docker_container_copy_into:
+        container: app-container
+        content: |
+          server {
+              listen 8080;
+              location /health {
+                  return 200 'OK';
+                  add_header Content-Type text/plain;
+              }
+          }
+        container_path: /etc/nginx/conf.d/health.conf
+        mode: "0644"
+
+    - name: Cleanup
+      community.docker.docker_container:
+        name: app-container
+        state: absent

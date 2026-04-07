@@ -1,0 +1,49 @@
+  - name: Deploy Jellyfin
+    scope: public
+    stack: media
+    community.docker.docker_container:
+      name: jellyfin
+      image: jellyfin/jellyfin
+      state: started
+      ports:
+        - "8096:8096"
+      devices: /dev/dri:/dev/dri
+      volumes:
+        - "{{ transcodes_path }}/transcodes":/cache
+        - "{{ media_path }}":/media
+        - "{{ config_path }}/{{ name }}/config":/config
+      restart_policy: unless-stopped
+
+  - name: Deploy Ombi
+    scope: public
+    stack: media
+    community.docker.docker_container:
+      name: ombi
+      image: linuxserver/ombi:latest
+      state: started
+      env:
+        PUID: 1000
+        PGID: 1000
+        TZ: Etc/UTC
+      ports:
+        - "3579:3579"
+      volumes:
+        - "{{ config_path }}/{{ name }}":/config
+      restart_policy: unless-stopped
+
+  - name: Deploy Prowlarr
+    scope: secure
+    stack: media
+    community.docker.docker_container:
+      name: prowlarr
+      image: linuxserver/prowlarr:latest
+      state: started
+      env:
+        PUID: 1000
+        PGID: 1000
+        TZ: Etc/UTC
+      ports:
+        - "9696:9696"
+      volumes:
+        - "{{ config_path }}/{{ name }}":/config
+      restart_policy: unless-stopped

@@ -1,0 +1,98 @@
+---
+- name: Deploy multi-container app with Docker Compose
+  hosts: docker_hosts
+  become: true
+
+  tasks:
+    - name: Create project directory
+      ansible.builtin.file:
+        path: /opt/wordpress
+        state: directory
+        mode: '0755'
+
+    - name: Create docker-compose.yml
+      ansible.builtin.copy:
+        content: |
+          services:
+            db:
+              image: mariadb:11
+              restart: unless-stopped
+              environment:
+                MARIADB_ROOT_PASSWORD: rootpass123
+                MARIADB_DATABASE: wordpress
+                MARIADB_USER: wpuser
+                MARIADB_PASSWORD: wppass456
+              volumes:
+                - db_data:/var/lib/mysql
+              networks:
+                - wp-network
+              healthcheck:
+                test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+
+            wordpress:
+              image: wordpress:6-apache
+              restart: unless-stopped
+              depends_on:
+                db:
+                  condition: service_healthy
+              ports:
+                - "8083:80"
+              environment:
+                WORDPRESS_DB_HOST: db
+                WORDPRESS_DB_USER: wpuser
+                WORDPRESS_DB_PASSWORD: wppass456
+                WORDPRESS_DB_NAME: wordpress
+              volumes:
+                - wp_data:/var/www/html
+              networks:
+                - wp-network
+
+          volumes:
+            db_data:
+            wp_data:
+
+          networks:
+            wp-network:
+              driver: bridge
+        dest: /opt/wordpress/docker-compose.yml
+
+    - name: Deploy the WordPress stack
+      community.docker.docker_compose_v2:
+        project_src: /opt/wordpress
+        state: present
+      register: compose_result
+
+    - name: Show deployment result
+      ansible.builtin.debug:
+        msg: "Services: {{ compose_result.containers | map(attribute='Name') | list }}"
+
+    - name: Wait for WordPress to be ready
+      ansible.builtin.uri:
+        url: http://localhost:8083
+        status_code: [200, 302]
+      register: wp_check
+      retries: 10
+      delay: 5
+      until: wp_check.status in [200, 302]
+
+    - name: Show WordPress status
+      ansible.builtin.debug:
+        msg: "WordPress is up: HTTP {{ wp_check.status }}"
+
+    - name: Pull updated images for the stack
+      community.docker.docker_compose_v2_pull:
+        project_src: /opt/wordpress
+
+    - name: Stop the WordPress stack
+      community.docker.docker_compose_v2:
+        project_src: /opt/wordpress
+        state: stopped
+
+    - name: Remove the stack completely (with volumes)
+      community.docker.docker_compose_v2:
+        project_src: /opt/wordpress
+        state: absent
+        remove_volumes: true
