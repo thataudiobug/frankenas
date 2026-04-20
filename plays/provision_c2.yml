@@ -1,0 +1,8 @@
+ansible-galaxy get proxmox
+
+apt install python3-proxmoxer
+apt install python3-requests
+
+pip install proxmoxer
+pip install requests
+

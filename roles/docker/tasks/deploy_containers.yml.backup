@@ -1,0 +1,47 @@
+- name: DEBUG Catalog Structure
+  debug:
+    var: docker_catalog.radarr
+
+- name: DEBUG Enabled Containers
+  debug:
+    var: docker_containers_overrides
+
+- name: Deploy Containers
+  community.docker.docker_container:
+    name: "{{ item.key }}"
+    image: "{{ item.value.image }}"
+    restart_policy: "{{ docker_conatiners_overrides.get('restart_policy') | item.value.('restart_policy') | default('restart_policy') }}"
+    ports: >-
+      {{
+        docker_conatiners_overrides[item.name].ports
+        | item.value.ports
+        | default(omit)
+       }}
+    volumes: >-
+      {{
+        docker_conatiners_overrides[item.name].volumes
+        | item.value.volumes
+        | default(omit)
+      }}
+    env: >-
+      {{
+        docker_conatiners_overrides[item.name].env
+        | item.value.env
+        | default(omit)
+      }}
+    devices: >-
+      {{
+        docker_conatiners_overrides[item.name].devices
+        | item.value.devices
+        | default(omit)
+      }}
+    state: started
+
+  loop: "{{ docker_catalog | dict2items }}"
+  when: >
+    item.key in docker_containers_enabled
+    or
+    (
+      item.value.groups is defined and
+      (item.value.groups | intersect(docker_containers_enabled) | length > 0)
+    )

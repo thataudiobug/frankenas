@@ -1,0 +1,38 @@
+- hosts: pve
+  tasks:
+  - name: Get Next VM/CT ID
+    command: 'pvesh get /cluster/nextid'
+    check_mode: false
+    register: nextid
+
+- hosts: localhost
+
+  vars:
+    nextid: hostvars['pve']['nextid']
+
+  tasks:
+  - name: Clone Ubuntu Desktop Template
+    community.proxmox.proxmox_kvm:
+      node: pve
+      api_user: robot@pam
+      api_host: 192.168.1.100
+      api_token_id: robot_token
+      api_token_secret: "{{ pve_api_key }}"
+      clone: 'ubuntu-desktop-template'
+      name: unprovisioned
+      storage: nott
+      format: qcow2
+      timeout: 600
+      ide:
+        ide2: 'nott:cloudinit,foprmat=qcow2'
+      sshkeys: |
+        '{{ casey_key }}'
+        '{{ robot_key }}'
+      searchdomains: 'frankenas.com'
+      nameservers:
+        - '1.1.1.1'
+        - '8.8.8.8'
+      net:
+        net0: 'virtio,bridge-vmbr1'
+      ipconfig:
+        ipconfig0: 'ip-192.168.1.{{ nextid }}'

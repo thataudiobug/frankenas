@@ -1,0 +1,9 @@
+- name: Gather some facts
+  service_facts:
+
+- name: Build Docker CE
+  include_tasks: install_docker.yml
+  when: ansible_facts.services['docker.service'].state == 'running'
+
+- name: Deploy Containers
+  import_tasks: deploy_containers.yml

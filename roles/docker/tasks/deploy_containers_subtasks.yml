@@ -1,0 +1,25 @@
+- name: Set container name
+  set_fact:
+    container_name: "{{ container_item.key }}"
+
+- name: Build final container config
+  set_fact:
+    container_config: >-
+      {{
+        docker_containers_catalog[container_name] | default({}) |
+        combine(container_item.value | default({}), recursive=True) |
+        combine(docker_containers_overrides[container_name] | default({}), recursive=True)
+      }}
+
+- name: Deploy {{ container_name }} container
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    image: "{{ container_config.image }}"
+    state: "{{ container_config.state | default('started') }}"
+    restart_policy: "{{ container_config.restart_policy | default(restart_policy) }}"
+    ports: "{{ container_config.ports | default([]) }}"
+    volumes: "{{ container_config.volumes | default([]) }}"
+    env: "{{ container_config.env | default({}) }}"
+    networks: "{{ container_config.networks | default([]) }}"
+    command: "{{ container_config.command | default(omit) }}"
+    labels: "{{ container_config.labels | default({}) }}"

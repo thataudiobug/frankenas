@@ -1,0 +1,50 @@
+---
+# tasks file for pve_dl_ct
+- name: Check if Container Exists
+  community.proxmox.proxmox_vm_info:
+    node: pve
+    api_user: robot@pam
+    api_host: 192.168.1.100
+    api_token_id: robot_token
+    api_token_secret: "{{ pve_api_key }}"
+    name: '{{ inventory_hostname }}'
+    type: lxc
+  register: does_ct
+
+- name: Build New Conatainer
+  community.proxmox.proxmox:
+    node: pve
+    api_user: robot@pam
+    api_host: 192.168.1.100
+    api_token_id: robot_token
+    api_token_secret: "{{ pve_api_key }}"
+    hostname: '{{ inventory_hostname }}'
+    ostemplate: 'local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst'
+    cores: 2
+    memory: 2048
+    disk_volume:
+      storage: caleb
+      size: 8
+    pubkey: "{{ [robot_key,casey_key]|join('\n') }}"
+    netif:
+      net0: "name=eth0,gw=192.168.1.254,ip={{ ansible_host }}/24,bridge=vmbr1,firewall=0"
+    features: nesting=1
+    description: "Last rebuilt by script at {{ now() }}"
+    state: present
+  when: does_ct.proxmox_vms is false
+
+- name: Ensure Container is Started
+  community.proxmox.proxmox:
+    node: pve
+    api_user: robot@pam
+    api_host: 192.168.1.100
+    api_token_id: robot_token
+    api_token_secret: "{{ pve_api_key }}"
+    hostname: '{{ inventory_hostname }}'
+    state: started
+  register: was_started
+
+- name: Wait for Container to finish Boot
+  ansible.builtin.pause:
+    seconds: 30
+  when: was_started is changed

@@ -1,0 +1,9 @@
+key_robot_pub: "{{ lookup('file','~/secrets/robot.pub') }}"
+key_robot_id: "{{ lookup('file','~/secrets/id_robot') }}"
+
+key_casey_pub: "{{ lookup('file','~/secrets/casey.pub') }}"
+
+key_robot_init_pub: "{{ lookup('file','~/secrets/robot_init.pub') }}"
+key_robot_init_id: "{{ lookup('file','~/secrets/id_robot_init') }}"
+
+key_pve_api: "{{ lookup('file','~/secrets/pve_api_key') }}"

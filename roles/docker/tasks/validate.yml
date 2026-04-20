@@ -1,0 +1,6 @@
+- name: Ensure Enabled Containers Exists in Catalog
+  assert:
+    that:
+      - docker_contianers[item] is defined
+    fail_msg: "It's fucked Jim"
+  loop: "{{ docker_containers_enabled }}"

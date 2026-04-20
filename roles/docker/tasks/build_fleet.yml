@@ -1,0 +1,18 @@
+---
+# tasks file for docker
+- name: initalize CT list
+  set_fact:
+    docker_contianers: []
+
+- name: Build Container Configs
+  set_fact:
+    docker_containers: "{{ docker_containers + [ merged_container ] }}"
+  vars:
+    base: "{{ docker_container_catalog[item] }}"
+    override: "{{ docker_container
+
+
+- name: Deploy Containers
+  community.docker.docker_container:
+    name: "{{ item.name }}"
+    image: "{{ item.image }}"

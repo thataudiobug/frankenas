@@ -1,0 +1,27 @@
+---
+# defaults file for docker
+ansible_user: root
+
+docker_containers: {}
+docker_containers_enabled: []
+docker_containers_overrides: {}
+
+docker_networks: {}
+docker_volumes: {}
+
+docker_pull_images: true
+
+docker_conatiners_overrides: {}
+restart_policy: "unless-stopped"
+state: started
+env:
+  - TZ: america/detroit
+
+
+config_path: /mnt/config
+media_path:  /mnt/media
+transcodes_path: /mnt/nott/transcodes
+slow_storage: /mnt/nott
+big_storage: /mnt/essek
+backup_storage: /mnt/yasha
+fast_storage: /mnt/caleb

@@ -1,0 +1,32 @@
+---
+# tasks file for dl_base
+- name: Update User + Robot Creds (lxc droplets)
+  authorized_key:
+    user: root
+    key: "{{ [robot_key,casey_key]|join('\n') }}"
+    state: present
+    exclusive: true
+  when: ansible_facts['virtualization_type'] == "lxc"
+
+- name: Update User Creds (qemu droplets)
+  authorized_key:
+    user: casey
+    key: '{{ casey_key }}'
+    state: present
+    exclusive: true
+  when: ansible_facts['virtualization_type'] == "qemu"
+
+- name: Update Robot Creds (qemu droplets)
+  authorized_key:
+    user: robot
+    key: '{{ robot_key }}'
+    state: present
+    exclusive: true
+  when: ansible_facts['virtualization_type'] == "qemu"
+
+- name: Update Apt Packages
+  apt:
+    name: "*"
+    update_cache: true
+    state: latest
+

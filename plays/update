@@ -1,6 +1,0 @@
-- name: Update All Droplets
-  hosts: droplets
-  tasks:
-  - name:  Apt-get update && upgrade
-    apt: "*"
-    state: latest

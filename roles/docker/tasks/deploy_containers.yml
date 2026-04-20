@@ -1,0 +1,46 @@
+- name: DEBUG CHECK
+  debug:
+    var: docker_containers_catalog.radarr.image
+
+
+- name: Build final container configurations
+  set_fact:
+    docker_containers_final: {}
+
+- name: Merge container configurations
+  set_fact:
+    docker_containers_final: >-
+      {{
+        docker_containers_final | combine({
+        item.key: docker_containers_catalog[item.key] | default({}) |
+                  combine(item.value | default({}), recursive=True) |
+                  combine(docker_containers_overrides[item.key] | default({}), recursive=True)
+         })
+      }}
+  loop: "{{ docker_containers_enabled | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: docker_containers_enabled is defined
+
+- name: Debug final container definitions
+  debug:
+    msg: "{{ item.key }} => {{ item.value }}"
+  loop: "{{ docker_containers_final | dict2items }}"
+
+- name: Deploy Docker containers
+  community.docker.docker_container:
+    name: "{{ item.key }}"
+    image: "{{ item.value.image }}"
+    state: "{{ item.value.state | default('started') }}"
+    restart_policy: "{{ item.value.restart_policy | default(restart_policy) }}"
+    ports: "{{ item.value.ports | default([]) }}"
+    volumes: "{{ item.value.volumes | default([]) }}"
+    env: "{{ item.value.env | default({}) }}"
+    networks: "{{ item.value.networks | default([]) }}"
+    command: "{{ item.value.command | default(omit) }}"
+    labels: "{{ item.value.labels | default({}) }}"
+    # Add other docker_container parameters as needed
+  loop: "{{ docker_containers_final | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: docker_containers_final | length > 0
