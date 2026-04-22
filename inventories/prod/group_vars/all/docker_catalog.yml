@@ -1,5 +1,4 @@
-docker_containers_catalog:
-
+docker_catalog_containers:
   npm:
     groups:
     image: "jc21/nginx-proxy-manager:latest"
@@ -19,8 +18,8 @@ docker_containers_catalog:
     volumes:
       - "{{ config_path}}/termix:/app/data"
     env:
-      PUID: 1000
-      PGID: 1000
+      PUID: "1000"
+      PGID: "1000"
       ENABLE_SSL: true
       SSL_KEY_PATH: "/app/data/ssl/termix.key"
       SSL_CERT_PATH: "/app/data/ssl/termix.crt"
@@ -34,8 +33,8 @@ docker_containers_catalog:
     volumes:
       - "{{ config_path }}/nextcloud:config"
     env:
-      PUID: 1000
-      PGID: 1000
+      PUID: "1000"
+      PGID: "1000"
       TZ: "america/detroit"
 
   jellyfin:
@@ -58,8 +57,8 @@ docker_containers_catalog:
     volumes:
       - "{{ config_path }}/ombi:/config"
     env:
-      PUID: 1000
-      PGID: 1000
+      PUID: "1000"
+      PGID: "1000"
       TZ: "america/detroit"
 
   prowlarr:
@@ -70,8 +69,8 @@ docker_containers_catalog:
     volumes:
       - "{{ config_path }}/prowlarr:/config"
     env:
-      PUID: 1000
-      PGID: 1000
+      PUID: "1000"
+      PGID: "1000"
       TZ: "america/detroit"
 
   sonarr:
@@ -84,22 +83,22 @@ docker_containers_catalog:
       - "{{ media_path }}/tv:/tv"
       - "{{ media_path }}/downloads:/downloads"
     env:
-      PUID: 1000
-      PGID: 1000
+      PUID: "1000"
+      PGID: "1000"
       TZ: "america/detroit"
 
   radarr:
     groups: "vpn"
     image: "linuxserver/radarr:latest"
     ports:
-      - "8989:8989"
+      - "7878:7878"
     volumes:
       - "{{ config_path }}/radarr:/config"
       - "{{ media_path }}/movies:/movies"
       - "{{ media_path }}/downloads:/downloads"
     env:
-      PUID: 1000
-      PGID: 1000
+      PUID: "1000"
+      PGID: "1000"
       TZ: "america/detroit"
 
   lidarr:
@@ -112,8 +111,8 @@ docker_containers_catalog:
       - "{{ media_path }}/music:/music"
       - "{{ media_path }}/downloads:/downloads"
     env:
-      PUID: 1000
-      PGID: 1000
+      PUID: "1000"
+      PGID: "1000"
       TZ: "america/detroit"
 
   qbittorrent:
@@ -127,8 +126,29 @@ docker_containers_catalog:
       - "{{ config_path }}/qbittorrent:/config"
       - "{{ media_path }}/downloads:/downloads"
     env:
-      PUID: 1000
-      PGID: 1000
+      PUID: "1000"
+      PGID: "1000"
       TZ: "america/detroit"
-      WEBGUI_PORT: 8080
-      TORRENTING_PORT: 6881
+      WEBGUI_PORT: "8080"
+      TORRENTING_PORT: "6881"
+
+
+docker_catalog_groups:
+  piracy:
+    radarr:
+    lidarr:
+    sonarr:
+    prowlarr:
+    qbittorrent:
+
+  proxys:
+    npm:
+
+  public:
+    jellyfin:
+    npm:
+    ombi:
+
+  testing:
+    radarr:
+    sonarr:
