@@ -6,6 +6,8 @@
       - ca-certificates
       - curl
       - gnupg
+      - python3
+      - python3-requests
     state: present
     update_cache: true
 

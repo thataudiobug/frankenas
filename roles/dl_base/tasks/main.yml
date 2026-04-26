@@ -30,3 +30,7 @@
     update_cache: true
     state: latest
 
+- name: Ensure Python installed and available
+  apt:
+    name: ["python3"]
+    state: latest

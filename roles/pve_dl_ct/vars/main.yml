@@ -1,2 +1,23 @@
 ---
 # vars file for pve_dl_ct
+pct_performance_class:
+  small:
+    cores: "2"
+    memory_mb: "2048"
+    disk_size_gb: "8"
+  medium:
+    cores: "4"
+    memory_mb: 4096
+    disk_size_gb: "8"
+  large:
+    cores: "6"
+    memory_mb: "4096"
+    disk_size_gb: "8"
+  xl:
+    cores: "8"
+    memory_mb: 8192
+    disk_size_gb: "8"
+
+pct_sotrage_location:
+  prod: "caleb"
+  test: "nott"

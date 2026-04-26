@@ -1,0 +1,10 @@
+network_catalog:
+  wan:
+    bridge: "vmbr1"
+    network: "192.168.1."
+    subnet: "24"
+    gateway: "192.168.1.254"
+  inet:
+    bridge: "vmbr1"
+    network: "192.168.8."
+    subnet: "24"

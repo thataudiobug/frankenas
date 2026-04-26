@@ -1,0 +1,9 @@
+- name: Install the thing
+  hosts: port_royal
+
+  tasks:
+  - name: do the thing
+    apt:
+      name: python3-requests
+      state: present
+      update_cache: true

@@ -1,12 +1,12 @@
 - name: Provision
-  hosts: test-port-01
+  hosts: docker
   gather_facts: false
   connection: local
   roles:
     - pve_dl_ct
 
 - name: Configure
-  hosts: test-port-01
+  hosts: docker
   gather_facts: true
   roles:
     - dl_base

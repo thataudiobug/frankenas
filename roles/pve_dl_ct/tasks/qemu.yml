@@ -1,0 +1,11 @@
+---
+- name: Check if Container Exists
+  community.proxmox.proxmox_vm_info:
+    node: pve
+    api_user: robot@pam
+    api_host: 192.168.1.100
+    api_token_id: robot_token
+    api_token_secret: "{{ pve_api_key }}"
+    name: '{{ inventory_hostname }}'
+    type: qemu
+  register: does_vm

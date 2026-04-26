@@ -1,0 +1,15 @@
+#!/bin/bash
+echo "Francinception verision 0.0.0"
+
+Currently just used to build hosts.
+
+# Default vars
+var_cpus="2"
+var_mem="2048"
+var_swap="512"
+var_fsvol="caleb"
+var_fsgb="8"
+var_wan_bridge="vmbr1"
+var_inet_bridge="vmbr0"
+var_gwid="254"
+var_dns_local="254"

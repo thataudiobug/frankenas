@@ -1,6 +1,0 @@
-config_path: /mnt/config
-media_path: /mnt/media
-high_perf_path: /mnt/caleb
-low_perf_path: /mnt/nott
-bulk_path: /mnt/essek
-redundant_path: /mnt/yasha

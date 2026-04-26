@@ -1,0 +1,146 @@
+docker_catalog_containers:
+  npm:
+    image: "jc21/nginx-proxy-manager:latest"
+    ports:
+      - "80:80"
+      - "81:81"
+      - "443:443"
+    volumes:
+      - "{{ config_path }}/npm/data:/data"
+      - "{{ config_path }}/npm/letsencrypt:/etc/letsencrypt"
+
+  termix:
+    image: "ghcr.io/lukegus/termix:latest"
+    ports:
+      - "8443:8443"
+    volumes:
+      - "{{ config_path}}/termix:/app/data"
+    env:
+      PUID: "1000"
+      PGID: "1000"
+      ENABLE_SSL: "true"
+      SSL_KEY_PATH: "/app/data/ssl/termix.key"
+      SSL_CERT_PATH: "/app/data/ssl/termix.crt"
+      SSL_PORT: "8443"
+
+  nextcloud:
+    image: "lscr.io/linuxserver/nextcloud:latest"
+    ports:
+      - "8096:8096"
+    volumes:
+      - "{{ config_path }}/nextcloud:config"
+    env:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "america/detroit"
+
+  jellyfin:
+    image: "jellyfin/jellyfin:latest"
+    ports:
+      - "8096:8096"
+    volumes:
+      - "{{ config_path }}/jellyfin/config:/config"
+      - "{{ transcodes_path }}:/cache"
+      - "{{ media_path }}:/media"
+    devices: "/dev/dri:/dev/dri"
+
+  ombi:
+    image: "linuxserver/ombi:latest"
+    ports:
+      - "3579:3579"
+    volumes:
+      - "{{ config_path }}/ombi:/config"
+    env:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "america/detroit"
+
+  prowlarr:
+    image: "linuxserver/prowlarr:latest"
+    ports:
+      - "9696:9696"
+    volumes:
+      - "{{ config_path }}/prowlarr:/config"
+    env:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "america/detroit"
+
+  sonarr:
+    image: "linuxserver/sonarr:latest"
+    ports:
+      - "8989:8989"
+    volumes:
+      - "{{ config_path }}/sonarr:/config"
+      - "{{ media_path }}/tv:/tv"
+      - "{{ media_path }}/downloads:/downloads"
+    env:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "america/detroit"
+
+  radarr:
+    image: "linuxserver/radarr:latest"
+    ports:
+      - "7878:7878"
+    volumes:
+      - "{{ config_path }}/radarr:/config"
+      - "{{ media_path }}/movies:/movies"
+      - "{{ media_path }}/downloads:/downloads"
+    env:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "america/detroit"
+
+  lidarr:
+    image: "linuxserver/lidarr:latest"
+    ports:
+      - "8686:8686"
+    volumes:
+      - "{{ config_path }}/lidarr:/config"
+      - "{{ media_path }}/music:/music"
+      - "{{ media_path }}/downloads:/downloads"
+    env:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "america/detroit"
+
+  qbittorrent:
+    image: "linuxserver/qbittorrent:latest"
+    ports:
+      - "6881:6881"
+      - "6881:6881/udp"
+      - "8080:8080"
+    volumes:
+      - "{{ config_path }}/qbittorrent:/config"
+      - "{{ media_path }}/downloads:/downloads"
+    env:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "america/detroit"
+      WEBGUI_PORT: "8080"
+      TORRENTING_PORT: "6881"
+
+
+docker_catalog_groups:
+  piracy:
+    radarr:
+    lidarr:
+    sonarr:
+    prowlarr:
+    qbittorrent:
+
+  proxys:
+    npm:
+
+  public:
+    jellyfin:
+    npm:
+    ombi:
+    termix:
+    nextcloud:
+
+  testing:
+    radarr:
+    sonarr:
+    termix:

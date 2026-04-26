@@ -1,0 +1,19 @@
+storage_catalog:
+  media:
+    src: "/essek/media"
+    mnt: "/mnt/media"
+  config:
+    src: "/Caleb/docker/configs"
+    mnt: "/mnt/config"
+  essek:
+    src: "/essek/docker/configs"
+    mnt: "/mnt/essek"
+  nott:
+    src: "/Nott"
+    mnt: "/mnt/nott"
+  caleb:
+    src: "/Caleb"
+    mnt: "/mnt/caleb"
+  yasha:
+    src: "/Yasha"
+    mnt: "/mnt/yasha"

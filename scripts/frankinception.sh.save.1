@@ -1,0 +1,254 @@
+#!/bin/bash
+#
+# Device Management Menu System
+# Uses Dialog for interactive menu interface
+#
+
+# Color codes for terminal output (when not using dialog)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Check if dialog is installed
+if ! command -v dialog &> /dev/null; then
+    echo -e "${RED}Error: 'dialog' is not installed.${NC}"
+    echo "Please install it using: sudo yum install dialog"
+    exit 1
+fi
+
+# Temporary file for dialog output
+DIALOG_TEMP=$(mktemp)
+trap "rm -f $DIALOG_TEMP" EXIT
+
+#######################################
+# Function: Build a new Device
+#######################################
+build_device() {
+    dialog --title "Build a New Device" \
+           --msgbox "Building a new device...\n\nThis function will handle device provisioning.\n\nPress OK to continue." 10 50
+
+    # Add your device build logic here
+    # Example:
+    # - Collect device information
+    # - Run provisioning scripts
+    # - Configure network settings
+
+    dialog --title "Build Device" \
+           --infobox "Device build process initiated..." 5 50
+    sleep 2
+}
+
+#######################################
+# Function: Manage a Device
+#######################################
+manage_device() {
+    # Sub-menu for device management
+    while true; do
+        dialog --title "Manage a Device" \
+               --menu "Select a management option:" 15 60 4 \
+               1 "View Device Status" \
+               2 "Update Device Configuration" \
+               3 "Restart Device Services" \
+               4 "Back to Main Menu" 2> $DIALOG_TEMP
+
+        choice=$?
+        if [ $choice -ne 0 ]; then
+            return
+        fi
+
+        selection=$(cat $DIALOG_TEMP)
+
+        case $selection in
+            1)
+                dialog --title "Device Status" \
+                       --msgbox "Displaying device status...\n\n[Status information would appear here]" 10 50
+                ;;
+            2)
+                dialog --title "Update Configuration" \
+                       --msgbox "Updating device configuration...\n\n[Configuration options would appear here]" 10 50
+                ;;
+            3)
+                dialog --title "Restart Services" \
+                       --yesno "Are you sure you want to restart device services?" 7 50
+                if [ $? -eq 0 ]; then
+                    dialog --infobox "Restarting services..." 5 40
+                    sleep 2
+                fi
+                ;;
+            4)
+                return
+                ;;
+        esac
+    done
+}
+
+#######################################
+# Function: Remove a Device
+#######################################
+remove_device() {
+    # Confirmation dialog
+    dialog --title "Remove a Device" \
+           --yesno "WARNING: This will remove a device from the system.\n\nAre you sure you want to continue?" 10 50
+    
+    if [ $? -eq 0 ]; then
+        # Get device identifier
+        dialog --title "Remove Device" \
+               --inputbox "Enter the Device ID or HWID to remove:" 10 50 2> $DIALOG_TEMP
+        
+        if [ $? -eq 0 ]; then
+            device_id=$(cat $DIALOG_TEMP)
+            
+            if [ -n "$device_id" ]; then
+                dialog --title "Removing Device" \
+                       --infobox "Removing device: $device_id\n\nPlease wait..." 7 50
+                sleep 2
+                
+                # Add your device removal logic here
+                # Example:
+                # - Decommission device
+                # - Remove from inventory
+                # - Clean up configurations
+                
+                dialog --title "Success" \
+                       --msgbox "Device $device_id has been removed successfully." 7 50
+            else
+                dialog --title "Error" \
+                       --msgbox "No device ID provided. Operation cancelled." 7 50
+            fi
+        fi
+    else
+        dialog --title "Cancelled" \
+               --msgbox "Device removal cancelled." 7 40
+    fi
+}
+
+#######################################
+# Function: Run a Play
+#######################################
+run_play() {
+    # List of available plays (you can modify this)
+    dialog --title "Run a Play" \
+           --menu "Select a play to run:" 15 60 5 \
+           1 "Network Configuration Play" \
+           2 "System Health Check Play" \
+           3 "Backup Configuration Play" \
+           4 "Security Audit Play" \
+           5 "Custom Play" 2> $DIALOG_TEMP
+    
+    choice=$?
+    if [ $choice -ne 0 ]; then
+        return
+    fi
+    
+    play_selection=$(cat $DIALOG_TEMP)
+    
+    case $play_selection in
+        1)
+            play_name="Network Configuration Play"
+            ;;
+        2)
+            play_name="System Health Check Play"
+            ;;
+        3)
+            play_name="Backup Configuration Play"
+            ;;
+        4)
+            play_name="Security Audit Play"
+            ;;
+        5)
+            dialog --title "Custom Play" \
+                   --inputbox "Enter the play name or path:" 10 50 2> $DIALOG_TEMP
+            play_name=$(cat $DIALOG_TEMP)
+            ;;
+    esac
+    
+    if [ -n "$play_name" ]; then
+        dialog --title "Running Play" \
+               --infobox "Executing: $play_name\n\nPlease wait..." 7 50
+        sleep 2
+        
+        # Add your play execution logic here
+        # Example:
+        # - Run ansible playbook
+        # - Execute automation scripts
+        # - Display results
+        
+        dialog --title "Play Complete" \
+               --msgbox "Play '$play_name' completed successfully." 7 60
+    fi
+}
+
+#######################################
+# Function: Display About Information
+#######################################
+show_about() {
+    dialog --title "About" \
+           --msgbox "Device Management System v1.0\n\nA bash-based menu system for device operations.\n\nCreated: $(date +%Y)" 12 50
+}
+
+#######################################
+# Main Menu Loop
+#######################################
+main_menu() {
+    while true; do
+        dialog --clear --title "Device Management System" \
+               --menu "Select an option:" 15 60 6 \
+               1 "Build a new Device" \
+               2 "Manage a Device" \
+               3 "Remove a Device" \
+               4 "Run a Play" \
+               5 "About" \
+               6 "Exit" 2> $DIALOG_TEMP
+        
+        # Check if user pressed Cancel or ESC
+        choice=$?
+        if [ $choice -ne 0 ]; then
+            clear
+            exit 0
+        fi
+        
+        # Get the selected option
+        selection=$(cat $DIALOG_TEMP)
+        
+        # Process the selection
+        case $selection in
+            1)
+                build_device
+                ;;
+            2)
+                manage_device
+                ;;
+            3)
+                remove_device
+                ;;
+            4)
+                run_play
+                ;;
+            5)
+                show_about
+                ;;
+            6)
+                clear
+                echo -e "${GREEN}Thank you for using Device Management System!${NC}"
+                exit 0
+                ;;
+            *)
+                dialog --title "Error" \
+                       --msgbox "Invalid option selected." 5 30
+                ;;
+        esac
+    done
+}
+
+#######################################
+# Script Entry Point
+#######################################
+
+# Display welcome message
+dialog --title "Welcome" \
+       --msgbox "Welcome to the Device Management System\n\nPress OK to continue..." 8 50
+
+# Start the main menu
+main_menu
+

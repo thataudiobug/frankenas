@@ -17,7 +17,7 @@
       flatten |
       unique
     }}
-  when: 
+  when:
     - docker_enabled_groups is defined
     - docker_enabled_groups | length > 0
     - docker_catalog_groups is defined

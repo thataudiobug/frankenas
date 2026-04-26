@@ -1,7 +1,0 @@
-- name: Deploy enabled containers
-  include_tasks: deploy_container.yml
-  loop: "{{ docker_containers_enabled | dict2items }}"
-  loop_control:
-    loop_var: container_item
-    label: "{{ container_item.key }}"
-  when: docker_containers_enabled is defined
