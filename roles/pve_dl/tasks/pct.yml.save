@@ -28,11 +28,7 @@
     pubkey: "{{ [robot_key,casey_key]|join('\n') }}"
     netif:
       net0: >
-        name="eth0",
-        gw="{{ network_catalog.wan.gateway }}",
-        ip="{{ ansible_host }}/{{ network_catalog.wan.subnet }}",
-        bridge="{{ network_catalog.wan.bridge }}",
-        firewall="0"
+        name=eth0,gw={{ network_catalog.wan.gateway }},ip={{ ansible_host }}/{{ network_catalog.wan.subnet }},bridge={{ network_catalog.wan.bridge }},firewall=0"
     features: nesting=1
     description: " Last rebuilt by script at {{ now() | string }}"
     state: present

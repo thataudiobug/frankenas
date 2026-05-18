@@ -1,0 +1,9 @@
+ansible_host: 192.168.1.103
+
+docker_enabled_groups:
+  public:
+
+os_enabled: ubuntu
+gpu_enabled: true
+performance_class: medium
+users_enabled: [casey, robot]

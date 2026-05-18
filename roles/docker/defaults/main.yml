@@ -3,7 +3,7 @@
 ansible_user: root
 
 docker_containers: {}
-docker_containers_enabled: []
+#docker_containers_enabled: []
 docker_containers_overrides: {}
 
 docker_networks: {}
@@ -11,7 +11,6 @@ docker_volumes: {}
 
 docker_pull_images: true
 
-docker_conatiners_overrides: {}
 restart_policy: "unless-stopped"
 state: started
 env:

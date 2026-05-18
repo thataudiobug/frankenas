@@ -1,0 +1,48 @@
+compute_catalog:
+  small:
+    cores: 2
+    memory_mb: 2048
+  medium:
+    cores: 4
+    memory_mb: 4096
+  large:
+    cores: 6
+    memory_mb: 4096
+  xl:
+    cores: 8
+    memory_mb: 8192
+
+accelerator_catalog:
+  gpu: |
+   'lxc.cgroup2.devices.allow: c 226:128 rwm
+    lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=file
+    lxc.hook.pre-start: sh -c "chown 100000:100993 /dev/dri/renderD128"'
+
+storage_catalog:
+  s8:
+    disk_size_gb: 8
+    disk_type: "caleb"
+  s20:
+    disk_size_gb: 20
+    disk_type: "caleb"
+  m8:
+    disk_size_gb: 8
+    disk_type: "nott"
+  m24:
+    disk_size_gb: 24
+    disk_type: "nott"
+
+os_catalog:
+  ubuntu:
+    ct_template: "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+
+network_catalog:
+  wan:
+    bridge: "vmbr1"
+    network: "192.168.1."
+    subnet: "24"
+    gateway: "192.168.1.254"
+  inet:
+    bridge: "vmbr0"
+    network: "192.168.8."
+    subnet: "24"

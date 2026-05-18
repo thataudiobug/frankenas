@@ -11,6 +11,8 @@ docker_catalog_containers:
       - '{{ docker_bind_catalog.config.mnt }}/npm/data:/data'
       - '{{ docker_bind_catalog.config.mnt }}/npm/letsencrypt:/etc/letsencrypt'
 
+  
+
   termix:
     image: "ghcr.io/lukegus/termix:latest"
     ports:

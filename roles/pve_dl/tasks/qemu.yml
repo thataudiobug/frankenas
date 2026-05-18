@@ -4,8 +4,8 @@
     node: pve
     api_user: robot@pam
     api_host: 192.168.1.100
-    api_token_id: robot_token
-    api_token_secret: "{{ pve_api_key }}"
+    api_token_id: "{{ api_catalog.pve_api.id }}"
+    api_token_secret: "{{ api_catalog.pve_api.key }}"
     name: '{{ inventory_hostname }}'
     type: qemu
   register: does_vm

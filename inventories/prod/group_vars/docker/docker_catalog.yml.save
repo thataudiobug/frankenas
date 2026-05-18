@@ -8,29 +8,29 @@ docker_catalog_containers:
       - "81:81"
       - "443:443"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/npm/data:/data'
-      - '{{ docker_bind_catalog.config.mnt }}/npm/letsencrypt:/etc/letsencrypt'
+      - '{{ storage_catalog.config.mnt }}/npm/data:/data'
+      - '{{ storage_catalog.config.mnt }}/npm/letsencrypt:/etc/letsencrypt'
 
   termix:
     image: "ghcr.io/lukegus/termix:latest"
     ports:
       - "8443:8443"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/termix:/app/data'
+      - '{{ storage_catalog.config.mnt }}/termix:/app/data'
     env:
       PUID: "1000"
       PGID: "1000"
-      ENABLE_SSL: "true"
-      SSL_KEY_PATH: "/app/data/ssl/termix.key"
-      SSL_CERT_PATH: "/app/data/ssl/termix.crt"
-      SSL_PORT: "8443"
+      ENABLE_SSL="true"
+      SSL_KEY_PATH="/app/data/ssl/termix.key"
+      SSL_CERT_PATH="/app/data/ssl/termix.crt"
+      SSL_PORT="8443"
 
   nextcloud:
     image: "lscr.io/linuxserver/nextcloud:latest"
     ports:
       - "8096:8096"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/nextcloud:/config'
+      - '{{ storage_catalog.config.mnt }}/nextcloud:config'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -41,10 +41,10 @@ docker_catalog_containers:
     ports:
       - "8096:8096"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/jellyfin/config:/config'
-      - '{{ docker_bind_catalog.nott.mnt }}:/cache'
-      - '{{ docker_bind_catalog.media.mnt }}:/media'
-    devices:
+      - '{{ storage_catalog.config.mnt }}/jellyfin/config:/config'
+      - '{{ storage_catalog.nott.mnt }}:/cache'
+      - '{{ storage_catalog.media.mnt }}:/media'
+    devices: 
       - "/dev/dri:/dev/dri"
 
   ombi:
@@ -52,7 +52,7 @@ docker_catalog_containers:
     ports:
       - "3579:3579"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/ombi:/config'
+      - '{{ storage_catalog.config.mnt }}/ombi:/config'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -63,7 +63,7 @@ docker_catalog_containers:
     ports:
       - "9696:9696"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/prowlarr:/config'
+      - '{{ storage_catalog.config.mnt }}/prowlarr:/config'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -74,9 +74,9 @@ docker_catalog_containers:
     ports:
       - "8989:8989"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/sonarr:/config'
-      - '{{ docker_bind_catalog.media.mnt }}/tv:/tv'
-      - '{{ docker_bind_catalog.media.mnt }}/downloads:/downloads'
+      - '{{ storage_catalog.config.mnt }}/sonarr:/config'
+      - '{{ storage_catalog.media.mnt }}/tv:/tv'
+      - '{{ storage_catalog.media.mnt }}/downloads:/downloads'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -87,9 +87,9 @@ docker_catalog_containers:
     ports:
       - "7878:7878"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt  }}/radarr:/config'
-      - '{{ docker_bind_catalog.media.mnt }}/movies:/movies'
-      - '{{ docker_bind_catalog.media.mnt }}/downloads:/downloads'
+      - '{{ storage_catalog.config.mnt  }}/radarr:/config'
+      - '{{ storage_catalog.media.mnt }}/movies:/movies'
+      - '{{ storage_catalog.media.mnt }}/downloads:/downloads'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -100,9 +100,9 @@ docker_catalog_containers:
     ports:
       - "8686:8686"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt  }}/lidarr:/config'
-      - '{{ docker_bind_catalog.media.mnt }}/music:/music'
-      - '{{ docker_bind_catalog.media.mnt }}/downloads:/downloads'
+      - '{{ storage_catalog.config.mnt  }}/lidarr:/config'
+      - '{{ storage_catalog.media.mnt }}/music:/music'
+      - '{{ storage_catalog.media.mnt }}/downloads:/downloads'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -115,8 +115,8 @@ docker_catalog_containers:
       - "6881:6881/udp"
       - "8080:8080"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt  }}/qbittorrent:/config'
-      - '{{ docker_bind_catalog.media.mnt  }}/downloads:/downloads'
+      - '{{ storage_catalog.config.mnt  }}/qbittorrent:/config'
+      - '{{ storage_catalog.media.mnt  }}/downloads:/downloads'
     env:
       PUID: "1000"
       PGID: "1000"

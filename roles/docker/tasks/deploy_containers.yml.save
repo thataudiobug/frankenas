@@ -49,46 +49,6 @@
     label: "{{ item.key }}"
   when: docker_enabled_all is defined and docker_enabled_all | length > 0
 
-- name: DEBUG 1
-  debug:
-    var: docker_containers_deploy
-
-- name: DEBUG 2
-  debug:
-    var: docker_catalog_loaded
-
-- name: DEBUG 4
-  debug:
-    var: docker_catalog_containers
-
-- name: DEBUG KILL ME
-  debug:
-    msg: "{{ storage_catalog }}"
-
-- name: DEBUG DIQ
-  debug:
-    msg: "{{ storage_catalog.m8 }}"
-
-- name: DEBUG FUCK
-  debug:
-    msg: "Container {{ item.key }} has image {{ item.value.image }} ({{ item.value.ports }})"
-  loop: "{{ lookup('ansible.builtin.dict', docker_catalog_containers) }}"
-
-#- name: Debug - Check each container exists in catalog
-#  debug:
-#    msg: "Container '{{ item.key }}' catalog entry: {{ item.key.image }}"
-#  loop: "{{ lookup('dict', docker_enabled_all) }}"
-#  loop_control:
-#    label: "{{ item.key }}"
-
-- name: DEBUG - Show docker_catalog_containers directly
-  debug:
-    var: item.key
-
-#- name: DEBUG - Show hostvars catalog
-  #debug:
-  #  msg: "{{ hostvars[inventory_hostname][docker_catalog_containers]['item.key'] }}"
-
 - name: Deploy Docker containers
   community.docker.docker_container:
     name: "{{ item.key }}"
@@ -103,4 +63,7 @@
     labels: "{{ item.value.labels | default({}) }}"
     recreate: "{{ item.value.recreate | default(false) }}"
     pull: "{{ item.value.pull | default(false) }}"
-  loop: "{{ lookup('ansible.builtin.dict', docker_catalog_containers) }}"
+  loop: "{{ docker_containers_deploy | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: docker_containers_deploy | length > 0
