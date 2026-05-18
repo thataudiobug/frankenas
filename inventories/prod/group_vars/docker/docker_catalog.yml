@@ -28,7 +28,7 @@ docker_catalog_containers:
   nextcloud:
     image: "lscr.io/linuxserver/nextcloud:latest"
     ports:
-      - "8096:8096"
+      - "8097:8097"
     volumes:
       - '{{ docker_bind_catalog.config.mnt }}/nextcloud:/config'
     env:
