@@ -1,6 +1,4 @@
-docker_catalog_loaded: true
-
-docker_catalog_containers:
+docker_containers_catalog:
   npm:
     image: "jc21/nginx-proxy-manager:latest"
     ports:
@@ -125,7 +123,7 @@ docker_catalog_containers:
       TORRENTING_PORT: "6881"
 
 
-docker_catalog_groups:
+docker_groups_catalog:
   piracy:
     radarr:
     lidarr:
