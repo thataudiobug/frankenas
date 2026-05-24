@@ -1,4 +1,20 @@
 ansible_host: 192.168.1.104
+os_enabled: "ubuntu"
+
+docker_groups_enabled:
+  piracy:
+
+docker_containers_overrides:
+
+gpu_enabled: false
+compute_enabled: "small"
+accelerator_enabled: "false"
+storage_enabled: "m8"
+network_enabled: "wan"
+
+
+users_enabled: [casey, robot]
+ansible_host: 192.168.1.104
 ansible_user: casey
 performance_class:
   medium:
