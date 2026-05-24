@@ -1,9 +1,15 @@
 ansible_host: 192.168.1.103
 
-docker_enabled_groups:
+docker_groups_enabled:
   public:
 
 os_enabled: ubuntu
 gpu_enabled: true
-performance_class: medium
+compute_enabled: "small"
+accelerator_enabled: "false"
+storage_enabled: "m8"
+network_enabled: "wan"
+os_enabled: "ubuntu"
 users_enabled: [casey, robot]
+
+docker_containers_overrides:
