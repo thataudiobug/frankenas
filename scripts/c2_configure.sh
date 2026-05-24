@@ -6,8 +6,8 @@ echo "Installing git, curl, and ansible"
 apt install git curl ansible -y
 
 echo "Requesting Robot Private Key"
-SSHKEYFILE="$home/.ssh/id_robot"
-read -ps 'Please paste the vault key: ' SSHKEY
+SSHKEYFILE="$HOME/.ssh/id_robot"
+read -ps 'Please paste the Robot Private Key: ' SSHKEY
 touch "$SSHKEYFILE"
 rm "$SSHKEYFILE"
 echo "$SSHKEY" >> "$SSHKEYFILE" 

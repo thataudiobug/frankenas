@@ -1,6 +1,0 @@
-- name: Syncronise Docker Fleet States
-  hosts: dockers
-  become: true
-
-  tasks:
-    - name: 

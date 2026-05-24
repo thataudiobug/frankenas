@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "frankinception"
+version = "0.1.0"
+description = "TUI utility for managing the frankenas Ansible inventory"
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=0.79",
+    "ruamel.yaml>=0.18",
+    "pydantic>=2.6",
+    "click>=8.1",
+]
+
+[project.scripts]
+frankinception = "frankinception.app:main"
+finc = "frankinception.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/frankinception"]

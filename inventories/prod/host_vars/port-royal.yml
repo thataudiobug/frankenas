@@ -3,7 +3,6 @@ ansible_host: 192.168.1.103
 docker_groups_enabled:
   public:
 
-os_enabled: ubuntu
 gpu_enabled: true
 compute_enabled: "small"
 accelerator_enabled: "false"
