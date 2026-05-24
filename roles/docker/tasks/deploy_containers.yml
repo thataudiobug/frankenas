@@ -10,24 +10,24 @@
       }}
   loop: >-
     {{
-      docker_enabled_groups.keys() | list |
-      map('extract', docker_catalog_groups) |
+      docker_groups_enabled.keys() | list |
+      map('extract', docker_groups_catalog) |
       map('dict2items') |
       map('map', attribute='key') |
       flatten |
       unique
     }}
   when:
-    - docker_enabled_groups is defined
-    - docker_enabled_groups | length > 0
-    - docker_catalog_groups is defined
+    - docker_groups_enabled is defined
+    - docker_groups_enabled | length > 0
+    - docker_groups_catalog is defined
 
 - name: Merge group-based and directly-enabled containers
   set_fact:
     docker_enabled_all: >-
       {{
         docker_enabled_from_groups |
-        combine(docker_enabled_containers | default({}))
+        combine(docker_containers_enabled | default({}))
       }}
 
 - name: Initialize docker_containers_deploy
@@ -39,7 +39,7 @@
     docker_containers_deploy: >-
       {{
         docker_containers_deploy | combine({
-          item.key: docker_catalog_containers[item.key] | default({}) |
+          item.key: docker_containers_catalog[item.key] | default({}) |
                     combine(item.value | default({}), recursive=True) |
                     combine(docker_containers_overrides[item.key] | default({}), recursive=True)
         })
@@ -49,30 +49,30 @@
     label: "{{ item.key }}"
   when: docker_enabled_all is defined and docker_enabled_all | length > 0
 
-- name: DEBUG 1
-  debug:
-    var: docker_containers_deploy
+#  name: DEBUG 1
+#  debug:
+#    var: docker_containers_deploy
 
-- name: DEBUG 2
-  debug:
-    var: docker_catalog_loaded
+#- name: DEBUG 2
+#  debug:
+#    var: docker_catalog_loaded
 
-- name: DEBUG 4
-  debug:
-    var: docker_catalog_containers
+#- name: DEBUG 4
+#  debug:
+#    var: docker_containers_catalog
 
-- name: DEBUG KILL ME
-  debug:
-    msg: "{{ storage_catalog }}"
+#- name: DEBUG KILL ME
+#  debug:
+#    msg: "{{ storage_catalog }}"
 
-- name: DEBUG DIQ
-  debug:
-    msg: "{{ storage_catalog.m8 }}"
+#- name: DEBUG DIQ
+#  debug:
+#    msg: "{{ storage_catalog.m8 }}"
 
-- name: DEBUG FUCK
-  debug:
-    msg: "Container {{ item.key }} has image {{ item.value.image }} ({{ item.value.ports }})"
-  loop: "{{ lookup('ansible.builtin.dict', docker_catalog_containers) }}"
+#- name: DEBUG FUCK
+#  debug:
+#    msg: "Container {{ item.key }} has image {{ item.value.image }} ({{ item.value.ports }})"
+#  loop: "{{ lookup('ansible.builtin.dict', docker_containers_catalog) }}"
 
 #- name: Debug - Check each container exists in catalog
 #  debug:
@@ -81,13 +81,13 @@
 #  loop_control:
 #    label: "{{ item.key }}"
 
-- name: DEBUG - Show docker_catalog_containers directly
-  debug:
-    var: item.key
+#- name: DEBUG - Show docker_containers_catalog directly
+#  debug:
+#    var: item.key
 
 #- name: DEBUG - Show hostvars catalog
-  #debug:
-  #  msg: "{{ hostvars[inventory_hostname][docker_catalog_containers]['item.key'] }}"
+#  debug:
+#    msg: "{{ hostvars[inventory_hostname][docker_containers_catalog]['item.key'] }}"
 
 - name: Deploy Docker containers
   community.docker.docker_container:
@@ -103,4 +103,4 @@
     labels: "{{ item.value.labels | default({}) }}"
     recreate: "{{ item.value.recreate | default(false) }}"
     pull: "{{ item.value.pull | default(false) }}"
-  loop: "{{ lookup('ansible.builtin.dict', docker_catalog_containers) }}"
+  loop: "{{ lookup('ansible.builtin.dict', docker_containers_catalog) }}"
