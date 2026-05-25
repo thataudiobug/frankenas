@@ -1,4 +1,16 @@
-"""Pick a playbook, optionally limit it to a host, and run it."""
+"""Pick a playbook, choose a limit scope, and run it.
+
+Flow:
+
+1. ``PlayRunnerScreen`` — list of playbooks; Enter on a row chooses it.
+2. ``_LimitTypeScreen`` — three options: no limit, limit by host, limit by
+   group. Returned value drives step 3.
+3. ``SinglePickerScreen`` (re-used) — only shown for the host/group choices,
+   pre-populated from the inventory.
+4. ``_RunOutputScreen`` — streams ansible-playbook output live.
+
+Check mode is a top-level toggle that applies to whatever runs.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +26,6 @@ from textual.widgets import (
     DataTable,
     Footer,
     Header,
-    Input,
     Label,
     RichLog,
     Static,
@@ -23,34 +34,34 @@ from textual.widgets import (
 from .. import runner
 from ..plays import Playbook, list_playbooks
 from ..state import AppState
+from .catalog_picker import SinglePickerScreen
 
 
 class PlayRunnerScreen(Screen):
     BINDINGS = [
         Binding("escape", "back", "Back"),
-        Binding("enter", "run", "Run"),
         Binding("r", "refresh", "Refresh"),
     ]
 
     def __init__(self, state: AppState, default_limit: str | None = None) -> None:
         super().__init__()
         self.state = state
-        self.default_limit = default_limit or ""
+        # ``default_limit`` is accepted for backwards-compat with callers but
+        # ignored — limit selection is now an explicit step after picking a
+        # playbook so the user isn't surprised by which host they're targeting.
+        del default_limit
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         with Vertical():
             yield Static(
                 f"[b]Run playbook[/b]   plays dir: [cyan]{self.state.layout.plays_dir}[/cyan]\n"
-                "Enter on a row to run with current options.",
+                "Enter on a row to choose a limit scope, then run.",
                 id="play-heading",
             )
             yield DataTable(id="plays", cursor_type="row", zebra_stripes=True)
             with Horizontal(id="play-options"):
-                yield Label("Limit:")
-                yield Input(value=self.default_limit, placeholder="host or pattern", id="limit-input")
                 yield Checkbox("Check mode (--check)", id="check-cb")
-                yield Button("Run", id="run-btn", variant="primary")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -65,34 +76,81 @@ class PlayRunnerScreen(Screen):
     def action_refresh(self) -> None:
         self._refill(self.query_one("#plays", DataTable))
 
-    def action_run(self) -> None:
-        self._run_selected()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "run-btn":
-            self._run_selected()
-
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.row_key.value is not None:
-            self._run(str(event.row_key.value))
+            self._choose_limit_then_run(str(event.row_key.value))
 
-    def _run_selected(self) -> None:
-        table: DataTable = self.query_one("#plays", DataTable)
-        if table.row_count == 0:
-            return
-        try:
-            row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
-        except Exception:
-            return
-        if row_key.value is None:
-            return
-        self._run(str(row_key.value))
+    # ---- limit-scope flow -------------------------------------------
 
-    def _run(self, name: str) -> None:
+    def _choose_limit_then_run(self, name: str) -> None:
         play = next((p for p in self._plays if p.name == name), None)
         if play is None:
             return
-        limit = self.query_one("#limit-input", Input).value.strip() or None
+
+        def _on_scope(choice: str | None) -> None:
+            # choice is "none" | "host" | "group" | None (cancel)
+            if choice is None:
+                return
+            if choice == "none":
+                self._run(play, limit=None)
+                return
+            if choice == "host":
+                self._pick_host_then_run(play)
+            elif choice == "group":
+                self._pick_group_then_run(play)
+
+        self.app.push_screen(_LimitTypeScreen(play.name), _on_scope)
+
+    def _pick_host_then_run(self, play: Playbook) -> None:
+        hosts = self.state.inventory.hosts()
+        if not hosts:
+            self.notify("No hosts in inventory", severity="warning")
+            return
+        # Build a "host -> groups" describe so the user has context. The
+        # picker accepts a dict, so we use None values purely for keys.
+        entries = {h: None for h in hosts}
+        inv = self.state.inventory
+
+        def describe(key: str, _value: object) -> str:
+            direct = inv.direct_groups_of(key)
+            return ", ".join(direct) if direct else ""
+
+        def _on_pick(host: str | None) -> None:
+            if host:
+                self._run(play, limit=host)
+
+        self.app.push_screen(
+            SinglePickerScreen(
+                f"Limit '{play.name}' to host", entries, None, describe=describe
+            ),
+            _on_pick,
+        )
+
+    def _pick_group_then_run(self, play: Playbook) -> None:
+        groups = sorted(self.state.inventory.groups())
+        if not groups:
+            self.notify("No groups in inventory", severity="warning")
+            return
+        entries = {g: None for g in groups}
+        inv = self.state.inventory
+
+        def describe(key: str, _value: object) -> str:
+            # Count how many hosts the group covers including children.
+            count = sum(1 for h in inv.hosts() if key in inv.all_groups_of(h))
+            return f"{count} host{'s' if count != 1 else ''}"
+
+        def _on_pick(group: str | None) -> None:
+            if group:
+                self._run(play, limit=group)
+
+        self.app.push_screen(
+            SinglePickerScreen(
+                f"Limit '{play.name}' to group", entries, None, describe=describe
+            ),
+            _on_pick,
+        )
+
+    def _run(self, play: Playbook, limit: str | None) -> None:
         check = self.query_one("#check-cb", Checkbox).value
         invocation = runner.build(
             playbook=play.path,
@@ -110,6 +168,67 @@ class PlayRunnerScreen(Screen):
         self._plays: list[Playbook] = list_playbooks(self.state.layout.plays_dir)
         for p in self._plays:
             table.add_row(p.name, p.description, key=p.name)
+
+
+class _LimitTypeScreen(ModalScreen[str | None]):
+    """Three-way modal: no limit, by host, or by group.
+
+    Returns one of ``"none"`` / ``"host"`` / ``"group"`` (or None on cancel).
+    """
+
+    BINDINGS = [
+        Binding("n", "no_limit", "No limit"),
+        Binding("h", "by_host", "Host"),
+        Binding("g", "by_group", "Group"),
+        Binding("up", "focus_previous", "Prev", show=False),
+        Binding("down", "focus_next", "Next", show=False),
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    def __init__(self, play_name: str) -> None:
+        super().__init__()
+        self._play_name = play_name
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=False)
+        with Vertical(id="bind-choice"):
+            yield Static(
+                f"[b]Limit scope for[/b] {self._play_name}\n"
+                "How should this run be scoped?",
+                id="bind-info",
+            )
+            yield Label("Pick an option (click or press the highlighted key):")
+            yield Button(
+                "[u]N[/u]o limit (run on all hosts the play targets)",
+                id="none-btn",
+                variant="primary",
+            )
+            yield Button("Limit by [u]h[/u]ost…", id="host-btn")
+            yield Button("Limit by [u]g[/u]roup…", id="group-btn")
+            yield Button("Cancel (Esc)", id="cancel-btn")
+        yield Footer()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "none-btn":
+            self.dismiss("none")
+        elif event.button.id == "host-btn":
+            self.dismiss("host")
+        elif event.button.id == "group-btn":
+            self.dismiss("group")
+        elif event.button.id == "cancel-btn":
+            self.dismiss(None)
+
+    def action_no_limit(self) -> None:
+        self.dismiss("none")
+
+    def action_by_host(self) -> None:
+        self.dismiss("host")
+
+    def action_by_group(self) -> None:
+        self.dismiss("group")
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
 
 
 class _RunOutputScreen(ModalScreen[None]):

@@ -112,6 +112,9 @@ class _ContainerFieldEditor(ModalScreen[None]):
     """Edit a few common override fields for one container."""
 
     BINDINGS = [
+        Binding("ctrl+s", "save_form", "Save"),
+        Binding("up", "focus_previous", "Prev", show=False),
+        Binding("down", "focus_next", "Next", show=False),
         Binding("escape", "cancel", "Cancel"),
     ]
 
@@ -141,16 +144,18 @@ class _ContainerFieldEditor(ModalScreen[None]):
             yield Input(value=str(current_restart), id="restart-input")
             yield Label("image (override the catalog image, e.g. pin a tag):")
             yield Input(value=str(current_image), id="image-input")
-            yield Button("Save", id="save-btn", variant="primary")
-            yield Button("Cancel", id="cancel-btn")
+            yield Button("Save (Ctrl+S)", id="save-btn", variant="primary")
+            yield Button("Cancel (Esc)", id="cancel-btn")
         yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel-btn":
             self.dismiss(None)
             return
-        if event.button.id != "save-btn":
-            return
+        if event.button.id == "save-btn":
+            self.action_save_form()
+
+    def action_save_form(self) -> None:
         host_vars = self.state.host_vars(self.host)
         for input_id, key in [
             ("state-input", "state"),

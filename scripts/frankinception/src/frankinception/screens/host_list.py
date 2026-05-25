@@ -15,7 +15,6 @@ class HostListScreen(Screen):
     """Pick a host to edit, or open one of the global tools."""
 
     BINDINGS = [
-        Binding("enter", "edit_host", "Edit host"),
         Binding("c", "import_compose", "Import compose"),
         Binding("p", "run_play", "Run playbook"),
         Binding("r", "reload", "Reload"),
@@ -31,8 +30,10 @@ class HostListScreen(Screen):
         with Vertical():
             yield Static(self._banner(), id="banner")
             with Horizontal(id="body"):
-                yield DataTable(id="hosts", cursor_type="row", zebra_stripes=True)
-                yield Static(self._actions_text(), id="actions")
+                with Vertical(id="hosts-pane", classes="pane"):
+                    yield DataTable(id="hosts", cursor_type="row", zebra_stripes=True)
+                with Vertical(id="actions-pane", classes="pane"):
+                    yield Static(self._actions_text(), id="actions")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -43,12 +44,14 @@ class HostListScreen(Screen):
 
     # ---- actions -----------------------------------------------------
 
-    def action_edit_host(self) -> None:
-        host = self._selected_host()
-        if host:
-            from .host_editor import HostEditorScreen
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        # DataTable fires this on Enter (and on click). We use it instead of a
+        # screen-level binding so the cursor row is always reliable.
+        if event.row_key.value is None:
+            return
+        from .host_editor import HostEditorScreen
 
-            self.app.push_screen(HostEditorScreen(self.state, host))
+        self.app.push_screen(HostEditorScreen(self.state, str(event.row_key.value)))
 
     def action_import_compose(self) -> None:
         from .compose_import import ComposeImportScreen
@@ -58,8 +61,9 @@ class HostListScreen(Screen):
     def action_run_play(self) -> None:
         from .play_runner import PlayRunnerScreen
 
-        host = self._selected_host()
-        self.app.push_screen(PlayRunnerScreen(self.state, default_limit=host))
+        # The play runner now prompts for limit scope after a play is picked,
+        # so we don't pre-fill anything from the cursor row.
+        self.app.push_screen(PlayRunnerScreen(self.state))
 
     def action_reload(self) -> None:
         self.state = AppState.load(self.state.layout)
@@ -100,13 +104,3 @@ class HostListScreen(Screen):
                 ", ".join(inherited) or "—",
                 key=host,
             )
-
-    def _selected_host(self) -> str | None:
-        table: DataTable = self.query_one("#hosts", DataTable)
-        if table.row_count == 0:
-            return None
-        try:
-            row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
-        except Exception:
-            return None
-        return str(row_key.value) if row_key.value is not None else None

@@ -36,17 +36,18 @@ class HostEditorScreen(Screen):
         with Vertical():
             yield Static(self._heading(), id="host-heading")
             with Horizontal(id="host-body"):
-                with Vertical(id="catalog-pane"):
+                with Vertical(id="catalog-pane", classes="pane"):
                     yield Static("[b]Catalog selections[/b]", id="catalog-pane-title")
                     yield DataTable(
                         id="catalog-table",
                         cursor_type="row",
                         zebra_stripes=True,
                     )
-                with Vertical(id="groups-pane"):
+                with Vertical(id="groups-pane", classes="pane"):
                     yield Static("[b]Groups[/b]", id="groups-title")
                     yield Static(self._groups_text(), id="groups-text")
                     yield Button("Edit groups (g)", id="edit-groups-btn", variant="primary")
+                    yield Button("Container overrides (o)", id="overrides-btn")
                     yield Static(self._hint_text(), id="hint")
         yield Footer()
 
@@ -57,6 +58,14 @@ class HostEditorScreen(Screen):
         table.focus()
 
     # ---- actions -----------------------------------------------------
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        # Buttons need explicit dispatch — the screen-level keybinds and the
+        # buttons share the same actions, but Textual won't auto-link them.
+        if event.button.id == "edit-groups-btn":
+            self.action_edit_groups()
+        elif event.button.id == "overrides-btn":
+            self.action_edit_overrides()
 
     def action_back(self) -> None:
         if self._dirty:

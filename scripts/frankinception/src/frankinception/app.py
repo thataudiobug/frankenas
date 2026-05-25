@@ -28,15 +28,32 @@ Screen {
     height: auto;
 }
 
-#hosts, #catalog-table, #plays, #containers {
-    height: 1fr;
+/* A pane is a bordered, padded container that sits next to other panes.
+   Anchoring the border at this level (not on the inner DataTable) keeps
+   adjacent panel edges aligned and stable on cursor moves. */
+.pane {
+    width: 1fr;
     border: round $primary;
-    margin: 1 1 1 1;
+    padding: 0 1;
+    margin: 1 1;
+}
+
+#body {
+    height: 1fr;
+}
+
+#host-body {
+    height: 1fr;
+}
+
+#hosts, #catalog-table, #plays, #containers, #map-table {
+    height: 1fr;
+    border: none;
+    margin: 0;
 }
 
 #actions, #groups-pane, #catalog-pane {
     width: 1fr;
-    padding: 1 2;
 }
 
 #picker {
@@ -47,7 +64,7 @@ Screen {
     background: $surface;
 }
 
-#bind-choice, #new-bind, #ctnr-edit, #picker {
+#bind-choice, #new-bind, #ctnr-edit, #picker, #vol-edit {
     margin: 2 4;
     padding: 1 2;
     border: thick $accent;
@@ -73,6 +90,10 @@ Screen {
 #hint {
     margin-top: 1;
     color: $text-muted;
+}
+
+Button {
+    margin: 1 0;
 }
 """
 

@@ -238,3 +238,4 @@ def test_list_playbooks_in_real_repo():
     assert "docker_fleet_deploy" in by_name
     # Two anonymous plays in docker_fleet_deploy → "Provision; Configure".
     assert by_name["docker_fleet_deploy"].description == "Provision; Configure"
+
