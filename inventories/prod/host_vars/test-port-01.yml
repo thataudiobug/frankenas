@@ -2,6 +2,7 @@ ansible_host: 192.168.1.110
 os_enabled: "ubuntu"
 
 docker_groups_enabled:
+  immich:
 
 
 docker_containers_overrides:
@@ -14,3 +15,4 @@ network_enabled: "wan"
 
 
 users_enabled: [casey, robot]
+docker_containers_enabled: {}

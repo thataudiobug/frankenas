@@ -35,6 +35,10 @@ class ParsedContainer:
     restart_policy: str | None = None
     command: str | list[str] | None = None
     labels: dict[str, str] = field(default_factory=dict)
+    env_file_paths: list[str] = field(default_factory=list)
+    """``env_file:`` entries from compose. Used at import time only —
+    these paths are read to populate the variable resolver and never
+    written to the catalog."""
 
     def as_catalog_entry(self) -> dict[str, Any]:
         """Drop empty fields so the catalog stays readable."""
@@ -109,6 +113,18 @@ def _compose_service_to_container(name: str, body: dict[str, Any]) -> ParsedCont
                 continue
             k, v = item.split("=", 1)
             container.env[k] = v
+
+    # env_file: single string or list of strings.
+    env_file = body.get("env_file")
+    if isinstance(env_file, str):
+        container.env_file_paths.append(env_file)
+    elif isinstance(env_file, list):
+        for entry in env_file:
+            if isinstance(entry, str):
+                container.env_file_paths.append(entry)
+            elif isinstance(entry, dict) and isinstance(entry.get("path"), str):
+                # The long form: ``- path: foo.env`` (compose v3.4+).
+                container.env_file_paths.append(entry["path"])
 
     # networks: list of names or mapping of name -> options.
     nets = body.get("networks")
@@ -222,6 +238,9 @@ def parse_docker_run(line: str) -> ParsedContainer:
             if value and "=" in value:
                 k, v = value.split("=", 1)
                 container.env[k] = v
+        elif flag == "--env-file":
+            if value:
+                container.env_file_paths.append(value)
         elif flag == "--network":
             if value:
                 container.networks.append(value)

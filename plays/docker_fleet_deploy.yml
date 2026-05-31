@@ -1,11 +1,12 @@
-- name: Provision
+#Fully provisions hosts who are docker hosts.
+- name: Provision docker hosts
   hosts: docker
   gather_facts: false
   connection: local
   roles:
     - pve_dl
 
-- name: Configure
+- name: Configure docker hosts
   hosts: docker
   gather_facts: true
   roles:

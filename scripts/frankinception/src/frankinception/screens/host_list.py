@@ -15,8 +15,10 @@ class HostListScreen(Screen):
     """Pick a host to edit, or open one of the global tools."""
 
     BINDINGS = [
-        Binding("c", "import_compose", "Import compose"),
+        Binding("n", "new_host", "New host"),
+        Binding("d", "manage_docker", "Docker catalog"),
         Binding("p", "run_play", "Run playbook"),
+        Binding("v", "manage_secrets", "Vault secrets"),
         Binding("r", "reload", "Reload"),
         Binding("q", "request_quit", "Quit"),
     ]
@@ -53,10 +55,10 @@ class HostListScreen(Screen):
 
         self.app.push_screen(HostEditorScreen(self.state, str(event.row_key.value)))
 
-    def action_import_compose(self) -> None:
-        from .compose_import import ComposeImportScreen
+    def action_manage_docker(self) -> None:
+        from .docker_list import DockerListScreen
 
-        self.app.push_screen(ComposeImportScreen(self.state))
+        self.app.push_screen(DockerListScreen(self.state))
 
     def action_run_play(self) -> None:
         from .play_runner import PlayRunnerScreen
@@ -64,6 +66,23 @@ class HostListScreen(Screen):
         # The play runner now prompts for limit scope after a play is picked,
         # so we don't pre-fill anything from the cursor row.
         self.app.push_screen(PlayRunnerScreen(self.state))
+
+    def action_manage_secrets(self) -> None:
+        from .secrets import SecretsScreen
+
+        self.app.push_screen(SecretsScreen(self.state))
+
+    def action_new_host(self) -> None:
+        from .new_host import NewHostScreen
+
+        def _after(_host_name: str | None) -> None:
+            # Refresh the table whether the user finished or bailed out.
+            # If they bailed mid-flow we may still have written nothing,
+            # so this is a no-op visually; if they completed, the new
+            # host shows up here on return.
+            self._refill_table(self.query_one("#hosts", DataTable))
+
+        self.app.push_screen(NewHostScreen(self.state), _after)
 
     def action_reload(self) -> None:
         self.state = AppState.load(self.state.layout)
@@ -86,8 +105,10 @@ class HostListScreen(Screen):
         return (
             "[b]Actions[/b]\n\n"
             "Enter — edit host\n"
-            "c — import docker-compose / docker run\n"
+            "n — new host\n"
+            "d — manage docker catalog\n"
             "p — run a playbook\n"
+            "v — manage vault secrets\n"
             "r — reload from disk\n"
             "q — quit"
         )

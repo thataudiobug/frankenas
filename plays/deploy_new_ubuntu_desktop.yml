@@ -1,3 +1,4 @@
+# Deploy a new Ubuntu Desktop
 - hosts: pve
   tasks:
   - name: Get Next VM/CT ID

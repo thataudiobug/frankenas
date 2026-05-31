@@ -1,3 +1,4 @@
+#runs the dl-base role against new droplets, now deprocated. 
 - name: Bootstrap new guests
   hosts: new_droplets
   vars:

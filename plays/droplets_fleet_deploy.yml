@@ -1,0 +1,13 @@
+#Fully provisions hosts who are droplets.
+- name: Provision Droplets
+  hosts: droplets
+  gather_facts: false
+  connection: local
+  roles:
+    - pve_dl
+
+- name: Configure droplets
+  hosts: droplets
+  gather_facts: true
+  roles:
+    - dl_base

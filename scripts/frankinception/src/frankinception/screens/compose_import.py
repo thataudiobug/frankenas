@@ -37,6 +37,9 @@ class ComposeImportScreen(Screen):
     def __init__(self, state: AppState) -> None:
         super().__init__()
         self.state = state
+        self._compose_dir: Path | None = None
+        """Directory of the most recently loaded file, used to find ``.env``
+        files at variable-resolution time. ``None`` for pasted text."""
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -76,6 +79,7 @@ class ComposeImportScreen(Screen):
             self.notify(f"File not found: {path}", severity="error")
             return
         self.query_one("#paste-area", TextArea).text = path.read_text(encoding="utf-8")
+        self._compose_dir = path.parent
         self.notify(f"Loaded {path}")
 
     def action_parse(self) -> None:
@@ -88,7 +92,34 @@ class ComposeImportScreen(Screen):
         if not containers:
             self.notify("Nothing to import", severity="warning")
             return
-        self.app.push_screen(_VolumeMappingScreen(self.state, containers))
+
+        # Detect ``${VAR}`` references. If there are none, skip straight
+        # to volume mapping; otherwise let the user resolve them first.
+        from .. import compose_vars
+        from .var_resolver import VariableResolverScreen
+
+        variables = compose_vars.find_variables(containers)
+        if not variables:
+            self.app.push_screen(_VolumeMappingScreen(self.state, containers))
+            return
+
+        env_vars = compose_vars.collect_env_vars(self._compose_dir, containers)
+        # Pre-populate any variable whose name exactly matches an env var.
+        # The user can still override these in the resolver UI.
+        for var in variables:
+            if var.name in env_vars and not var.has_resolution:
+                var.resolved = env_vars[var.name]
+
+        def _on_resolved(resolved: list | None) -> None:
+            if resolved is None:
+                return
+            compose_vars.apply_resolutions(containers, resolved)
+            self.app.push_screen(_VolumeMappingScreen(self.state, containers))
+
+        self.app.push_screen(
+            VariableResolverScreen(self.state, variables, env_vars),
+            _on_resolved,
+        )
 
 
 class _VolumeMappingScreen(Screen):

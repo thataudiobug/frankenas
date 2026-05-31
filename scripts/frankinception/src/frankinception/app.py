@@ -11,6 +11,7 @@ from textual.app import App
 from . import paths
 from .screens.host_list import HostListScreen
 from .state import AppState
+from . import __version__
 
 
 CSS = """
@@ -24,8 +25,18 @@ Screen {
     background: $boost;
 }
 
-#body, #host-body, #import-row, #play-options {
+#body, #host-body, #import-row, #play-options, #play-extra {
     height: auto;
+}
+
+/* The extra-flags row needs the input to take most of the width and the
+   label to sit comfortably against it. */
+#play-extra Label {
+    padding: 1 1 0 1;
+}
+
+#play-extra Input {
+    width: 1fr;
 }
 
 /* A pane is a bordered, padded container that sits next to other panes.
@@ -83,6 +94,28 @@ Screen {
     margin: 1 1;
 }
 
+/* The play-runner output screen is a ModalScreen — modal screens size
+   to their content by default. We want the run log to dominate the
+   layout, so pin the outer container to fill the screen and constrain
+   the input/button rows to their natural height. */
+.run-output-screen {
+    align: left top;
+}
+
+.run-output-screen > Vertical {
+    width: 100%;
+    height: 100%;
+}
+
+#run-input-row, #run-bottom-row {
+    height: auto;
+    padding: 0 1;
+}
+
+#run-input-row Input {
+    width: 1fr;
+}
+
 .dim {
     color: $text-muted;
 }
@@ -113,6 +146,7 @@ class FrankinceptionApp(App):
 
 
 @click.command()
+@click.version_option(version=__version__, prog_name="frankinception")
 @click.option(
     "--inventory",
     type=click.Path(file_okay=False, path_type=Path),
