@@ -1,5 +1,9 @@
 ---
 # tasks file for pve_dl
+- name: Resolve enabled networks (shared by pct and qemu)
+  include_tasks: build_networks.yml
+  when: "'pct' in group_names or 'qemu' in group_names"
+
 - name: Provision Proxmox Containers
   include_tasks: pct.yml
   when: "'pct' in group_names"
