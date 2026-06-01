@@ -16,16 +16,16 @@
   ansible.builtin.debug:
     var: pct_netif
 
-- name: Check if Proxmox Container Exists
-  community.proxmox.proxmox_vm_info:
-    node: pve
-    api_user: robot@pam
-    api_host: 192.168.1.100
-    api_token_id: "{{ api_catalog.pve_api.id }}"
-    api_token_secret: "{{ api_catalog.pve_api.key }}"
-    name: '{{ inventory_hostname }}'
-    type: lxc
-  register: does_vm
+#- name: Check if Proxmox Container Exists
+#  community.proxmox.proxmox_vm_info:
+#    node: pve
+#    api_user: robot@pam
+#    api_host: 192.168.1.100
+#    api_token_id: "{{ api_catalog.pve_api.id }}"
+#    api_token_secret: "{{ api_catalog.pve_api.key }}"
+#    name: '{{ inventory_hostname }}'
+#    type: lxc
+#  register: does_vm
 
 - name: Build New Proxmox Containers
   community.proxmox.proxmox:
@@ -51,23 +51,7 @@
       - "nesting=1"
     state: present
   register: was_built
-  when: does_vm.proxmox_vms[0] is not defined
-
-# Set the description only on an actual build. Keeping the timestamped
-# description out of the build task above preserves idempotency — including
-# it there made every run differ (the timestamp always changes), forcing a
-# rebuild. This separate task runs only when the CT was just created.
-- name: Stamp the build description (only on a fresh build)
-  community.proxmox.proxmox:
-    node: pve
-    api_user: robot@pam
-    api_host: 192.168.1.100
-    api_token_id: "{{ api_catalog.pve_api.id }}"
-    api_token_secret: "{{ api_catalog.pve_api.key }}"
-    hostname: '{{ inventory_hostname }}'
-    description: "Last rebuilt by script at {{ now() | string }}"
-    state: present
-  when: was_built.changed
+  #when: does_vm.proxmox_vms[0] is not defined
 
 - name: Remove Stale known_hosts Entries for Rebuilt Container
   command: ssh-keygen -R "{{ item }}"
@@ -80,6 +64,18 @@
   delegate_to: localhost
   changed_when: false
   failed_when: false
+
+- name: Stamp the build description (only on a fresh build)
+  community.proxmox.proxmox:
+    node: pve
+    api_user: robot@pam
+    api_host: 192.168.1.100
+    api_token_id: "{{ api_catalog.pve_api.id }}"
+    api_token_secret: "{{ api_catalog.pve_api.key }}"
+    hostname: '{{ inventory_hostname }}'
+    description: "Last rebuilt by script at {{ now() | string }}"
+    state: present
+  when: was_built.changed
 
 - name: Wait for buildout to complete
   pause:
