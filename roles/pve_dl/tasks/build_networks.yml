@@ -1,1 +1,209 @@
+---
+# Resolve the host's enabled networks into an ordered, fully-computed list
+# that the pct/qemu task files format into their platform-specific network
+# config. Produces ``resolved_networks``:
+#
+#   resolved_networks:
+#     - {index: 0, key: wan, bridge: vmbr1, ip: 192.168.1.103,
+#        subnet: "24", gateway: "192.168.1.254", is_mgmt: true}
+#     - {index: 1, key: oob, bridge: vmbr0, ip: 10.128.0.42,
+#        subnet: "9", gateway: "", is_mgmt: false, is_conn: true}
+#
+# Selection follows the catalog -> enabled framework. The host-var is
+# ``network_enabled`` (matching the ``network_catalog`` stem). It may be:
+#
+#   network_enabled: wan                 # scalar — single network
+#   network_enabled: [wan, oob]          # list — multiple, no overrides
+#   network_enabled:                     # mapping — multiple w/ overrides
+#     wan:
+#     oob:
+#       ip: 10.128.0.42                  # explicit IP
+#       # or host: 42                    # octet + catalog 'network' prefix
+#       # or dhcp: true                  # DHCP instead of a static address
+#
+# A network is DHCP when (in precedence order): the host override sets
+# ``dhcp: true`` / ``ip: dhcp``, the host provides a static ip/host (=>
+# static), or the catalog entry defaults ``dhcp: true``. DHCP networks need
+# no IP and emit no static gateway — the DHCP server provides both.
+#
+# frankinception writes the scalar form for "pick one" catalogs and the
+# mapping form for "pick many"; a hand-written list is also accepted. We
+# normalise all three into ``_nets`` (a mapping of key -> overrides) here.
 
+- name: Normalise network_enabled (mapping form)
+  ansible.builtin.set_fact:
+    _nets: "{{ network_enabled }}"
+  when:
+    - network_enabled is defined
+    - network_enabled is mapping
+
+- name: Normalise network_enabled (scalar form)
+  ansible.builtin.set_fact:
+    _nets: "{{ {network_enabled: {}} }}"
+  when:
+    - network_enabled is defined
+    - network_enabled is string
+
+- name: Normalise network_enabled (list form)
+  ansible.builtin.set_fact:
+    _nets: "{{ dict(network_enabled | zip([{}] * (network_enabled | length))) }}"
+  when:
+    - network_enabled is defined
+    - network_enabled is not mapping
+    - network_enabled is not string
+    - network_enabled is iterable
+
+- name: Assert at least one network is enabled
+  ansible.builtin.assert:
+    that:
+      - _nets is defined
+      - _nets | length > 0
+    fail_msg: >-
+      No networks enabled for {{ inventory_hostname }}. Set network_enabled
+      in host_vars (scalar, list, or mapping of network keys).
+    quiet: true
+
+- name: Validate every enabled network exists in the catalog
+  ansible.builtin.assert:
+    that:
+      - item in network_catalog
+    fail_msg: "Enabled network '{{ item }}' is not present in network_catalog."
+    quiet: true
+  loop: "{{ _nets.keys() | list }}"
+
+# -- Identify the connection (ansible_host) and gateway interfaces -----
+#
+# Two distinct roles that used to be the same NIC on a flat network:
+#
+#   * gateway NIC   — carries the default route (catalog defines 'gateway')
+#   * connection NIC — the interface Ansible reaches the box on; its IP is
+#                       ansible_host. Marked with 'oob: true' in the catalog.
+#
+# With an out-of-band management network these differ: ansible_host is the
+# OOB address, NOT the WAN/gateway-facing address. On a flat network (no
+# OOB) they're the same NIC, and we preserve the old behaviour by falling
+# back to the gateway NIC as the connection NIC.
+
+- name: Find management networks (catalog entry defines a gateway)
+  ansible.builtin.set_fact:
+    _mgmt_keys: "{{ _mgmt_keys | default([]) + [item] }}"
+  loop: "{{ _nets.keys() | list }}"
+  when: network_catalog[item].gateway is defined
+  loop_control:
+    label: "{{ item }}"
+
+- name: Assert no more than one management (gateway) network
+  ansible.builtin.assert:
+    that:
+      - (_mgmt_keys | default([])) | length <= 1
+    fail_msg: >-
+      More than one enabled network defines a gateway
+      ({{ _mgmt_keys | default([]) }}). Exactly one default route is
+      allowed — only one network_catalog entry in use may set 'gateway'.
+    quiet: true
+
+- name: "Find OOB networks (catalog entry flagged oob)"
+  ansible.builtin.set_fact:
+    _oob_keys: "{{ _oob_keys | default([]) + [item] }}"
+  loop: "{{ _nets.keys() | list }}"
+  when: network_catalog[item].oob | default(false) | bool
+  loop_control:
+    label: "{{ item }}"
+
+- name: Assert no more than one OOB network
+  ansible.builtin.assert:
+    that:
+      - (_oob_keys | default([])) | length <= 1
+    fail_msg: >-
+      More than one enabled network is flagged oob: true
+      ({{ _oob_keys | default([]) }}). Only one interface can carry the
+      ansible_host connection address.
+    quiet: true
+
+# The connection NIC (whose IP defaults to ansible_host) is the OOB network
+# if one is enabled; otherwise the gateway NIC (flat-network back-compat).
+- name: Determine the connection NIC (gets ansible_host as its IP)
+  ansible.builtin.set_fact:
+    _conn_key: >-
+      {{
+        (_oob_keys | default([]))
+        | union(_mgmt_keys | default([]))
+        | first | default('')
+      }}
+
+# -- Order: gateway NIC first (net0), then the rest --------------------
+- name: Order networks with the gateway NIC first
+  ansible.builtin.set_fact:
+    _net_order: >-
+      {{
+        (_mgmt_keys | default([]))
+        + (_nets.keys() | list | difference(_mgmt_keys | default([])))
+      }}
+
+# -- Resolve each network into its concrete config ---------------------
+- name: Resolve each enabled network
+  ansible.builtin.set_fact:
+    resolved_networks: >-
+      {{
+        resolved_networks | default([]) + [{
+          'index': idx,
+          'key': key,
+          'bridge': network_catalog[key].bridge,
+          'subnet': network_catalog[key].subnet,
+          'gateway': network_catalog[key].gateway | default(''),
+          'is_mgmt': key in (_mgmt_keys | default([])),
+          'is_oob': key in (_oob_keys | default([])),
+          'is_conn': key == _conn_key,
+          'dhcp': net_dhcp | bool,
+          'ip': net_ip | trim
+        }]
+      }}
+  loop: "{{ _net_order }}"
+  loop_control:
+    index_var: idx
+    loop_var: key
+    label: "{{ key }}"
+  vars:
+    net_cfg: "{{ _nets[key] | default({}, true) }}"
+    # DHCP when the host override asks for it (dhcp: true or ip: dhcp), OR
+    # the catalog entry defaults to dhcp (dhcp: true or ip: dhcp) — UNLESS
+    # the host gave a static ip/host, which always wins and forces static.
+    net_dhcp: >-
+      {%- if net_cfg.ip is defined and net_cfg.ip | string | lower != 'dhcp' -%}false
+      {%- elif net_cfg.host is defined -%}false
+      {%- elif net_cfg.dhcp is defined -%}{{ net_cfg.dhcp }}
+      {%- elif (net_cfg.ip is defined) and (net_cfg.ip | string | lower == 'dhcp') -%}true
+      {%- elif network_catalog[key].dhcp is defined -%}{{ network_catalog[key].dhcp }}
+      {%- elif (network_catalog[key].ip is defined) and (network_catalog[key].ip | string | lower == 'dhcp') -%}true
+      {%- else -%}false
+      {%- endif -%}
+    # IP precedence (static networks only): explicit ip > catalog prefix +
+    # host octet > ansible_host (connection NIC only) > empty. DHCP networks
+    # resolve to an empty ip on purpose — the renderers emit ip=dhcp.
+    net_ip: >-
+      {%- if net_dhcp | bool -%}{%- endif -%}
+      {%- if not (net_dhcp | bool) -%}
+      {%- if net_cfg.ip is defined and net_cfg.ip | string | lower != 'dhcp' -%}{{ net_cfg.ip }}
+      {%- elif net_cfg.host is defined -%}{{ network_catalog[key].network }}{{ net_cfg.host }}
+      {%- elif key == _conn_key -%}{{ ansible_host }}
+      {%- else -%}{%- endif -%}
+      {%- endif -%}
+
+- name: Assert every static network resolved to an IP
+  ansible.builtin.assert:
+    that:
+      - item.dhcp | bool or (item.ip | length > 0)
+    fail_msg: >-
+      Network '{{ item.key }}' on {{ inventory_hostname }} is static but has
+      no IP. Give it an 'ip' (full address) or 'host' (octet) under
+      network_enabled, mark it 'dhcp: true', or ensure it's the connection
+      NIC (OOB network, or the gateway NIC on a flat network) which
+      auto-uses ansible_host.
+    quiet: true
+  loop: "{{ resolved_networks }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Show resolved networks
+  ansible.builtin.debug:
+    var: resolved_networks

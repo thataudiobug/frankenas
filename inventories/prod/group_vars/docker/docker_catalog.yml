@@ -1,4 +1,4 @@
-docker_containers_catalog:
+docker_containers_catalog:  # pick many
   npm:
     image: "jc21/nginx-proxy-manager:latest"
     ports:
@@ -122,37 +122,8 @@ docker_containers_catalog:
       WEBGUI_PORT: "8080"
       TORRENTING_PORT: "6881"
 
-  immich_server:
-    image: ghcr.io/immich-app/immich-server:release
-    ports:
-      - 2283:2283
-    volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/immich:/data'
-      - /etc/localtime:/etc/localtime:ro
-    restart_policy: always
-  immich_machine_learning:
-    image: ghcr.io/immich-app/immich-machine-learning:release
-    volumes:
-      - '{{ docker_bind_catalog.nott.mnt }}:/cache'
-    restart_policy: always
 
-  immich_redis:
-    image: docker.io/valkey/valkey:9@sha256:3b55fbaa0cd93cf0d9d961f405e4dfcc70efe325e2d84da207a0a8e6d8fde4f9
-    restart_policy: always
-
-  immich_postgres:
-    image: 
-      ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23
-    volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/immich/postgres:/var/lib/postgresql/data'
-    env:
-      POSTGRES_PASSWORD: '{{ vault_immic_db_password }}'
-      POSTGRES_USER: '{{ vault_immich_db_username }}'
-      POSTGRES_DB: immichdb
-      POSTGRES_INITDB_ARGS: --data-checksums
-    restart_policy: always
-
-docker_groups_catalog:
+docker_groups_catalog:  # pick many
   piracy:
     radarr:
     lidarr:
@@ -174,9 +145,3 @@ docker_groups_catalog:
     radarr:
     sonarr:
     termix:
-
-  immich:
-    immich_server:
-    immich_machine_learning:
-    immich_redis:
-    immich_postgres:

@@ -1,4 +1,4 @@
-ansible_host: 192.168.1.104
+ansible_host: port-tortuga.oob.frankenas.lan   # was 192.168.1.104
 os_enabled: "ubuntu"
 
 docker_groups_enabled:
@@ -10,7 +10,9 @@ gpu_enabled: false
 compute_enabled: "small"
 accelerator_enabled: "false"
 storage_enabled: "m8"
-network_enabled: "wan"
+network_enabled:
+  wan:        # default route + internet
+  oob:        # connection NIC, DHCP lease, auto-registered A record
 
 
 users_enabled: [casey, robot]

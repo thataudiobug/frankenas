@@ -1,0 +1,58 @@
+---
+# free_port53.yml — free TCP/UDP :53 for dnsmasq
+#
+# Ubuntu ships systemd-resolved with a stub listener on 127.0.0.53:53, which
+# collides with dnsmasq. This helper:
+#   1. disables the stub listener (DNSStubListener=no) via a drop-in,
+#   2. restarts systemd-resolved so the port is released, and
+#   3. repoints /etc/resolv.conf so the box's own lookups go to dnsmasq
+#      (127.0.0.1) instead of the now-disabled stub.
+#
+# Kept separate from main.yml for readability and reuse. The restart is gated
+# on the drop-in actually changing so reruns stay idempotent.
+
+- name: Ensure systemd-resolved drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Disable the systemd-resolved stub listener (frees :53)
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/10-disable-stub.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ ansible_managed }}
+      # dnsmasq owns :53 on this host; turn off the systemd-resolved stub
+      # listener so the two don't collide.
+      [Resolve]
+      DNSStubListener=no
+  register: _resolved_stub
+
+- name: Restart systemd-resolved so :53 is released
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
+    daemon_reload: true
+  when: _resolved_stub.changed
+
+# /etc/resolv.conf is usually a symlink to the systemd-resolved stub
+# (127.0.0.53). Replace it with a regular file pointing at dnsmasq on the
+# loopback so the box's own lookups resolve through the service it runs.
+- name: Repoint /etc/resolv.conf at dnsmasq (loopback)
+  ansible.builtin.copy:
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+    follow: false
+    content: |
+      # {{ ansible_managed }}
+      # Local lookups go to dnsmasq on the loopback; the systemd-resolved
+      # stub listener is disabled (see 10-disable-stub.conf).
+      nameserver 127.0.0.1
+      search {{ _dns.domain }}

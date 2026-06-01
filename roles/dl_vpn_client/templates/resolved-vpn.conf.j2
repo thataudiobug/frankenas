@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+# DNS queries go to these resolvers. With redirect-gateway the default
+# route is the tunnel, so these queries are encrypted.
+[Resolve]
+DNS={{ vpn_dns_servers | join(' ') }}
+Domains=~.
+# Refuse falling back to per-link (DHCP-provided) resolvers, which would
+# leak DNS onto the physical NIC.
+FallbackDNS=

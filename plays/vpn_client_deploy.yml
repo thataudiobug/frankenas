@@ -1,0 +1,15 @@
+# Deploy VPN client + kill switch to vpn_clients hosts
+---
+# Provisions the OpenVPN client and fail-closed firewall on hosts in the
+# `vpn_clients` group. Run with the vault available so credentials resolve:
+#
+#   ansible-playbook plays/vpn_client_deploy.yml --limit <host>
+#
+# (frankinception's play runner supplies the vault password via PTY.)
+
+- name: Deploy VPN client with kill switch
+  hosts: vpn_clients
+  gather_facts: true
+  become: true
+  roles:
+    - dl_vpn_client

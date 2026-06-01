@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# Minimal main config. All operational settings live in the conf-dir
+# drop-in (10-oob.conf) so they can be regenerated independently.
+conf-dir=/etc/dnsmasq.d,.conf
+
+# Listen only where we intend to serve; never the WAN NIC.
+interface={{ _dns.oob_iface }}
+except-interface={{ _dns.wan_iface }}
+bind-interfaces
+listen-address=127.0.0.1,{{ _dns.self_ip }}
+
+# Don't read the host resolv.conf; forward only to our chosen upstreams.
+no-resolv
+{% for up in _dns.upstream_dns %}
+server={{ up }}
+{% endfor %}

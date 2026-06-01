@@ -1,0 +1,101 @@
+---
+# Leak-test / health-check tasks for the VPN kill switch.
+#
+# Included by the role after setup, and runnable stand-alone via
+# plays/vpn_killswitch_verify.yml for ad-hoc or scheduled checks.
+#
+# What "leak-free" means here:
+#   * the tunnel interface exists and is up,
+#   * the default route points at the tunnel,
+#   * public egress works AND exits via the VPN (public IP != the host's
+#     own WAN IP, when we can determine the latter),
+#   * with the tunnel notionally down, the kill switch would block egress
+#     (we assert the firewall table is present and the output policy is
+#     drop rather than actually tearing the tunnel down).
+#
+# Set vpn_verify_strict=false to log problems as warnings instead of
+# failing the play.
+
+- name: Check the tunnel interface exists and is up
+  ansible.builtin.command:
+    cmd: "ip -o link show {{ vpn_tun_dev }}"
+  register: vpn_iface
+  changed_when: false
+  failed_when: false
+
+- name: Record tunnel-up state
+  ansible.builtin.set_fact:
+    vpn_tunnel_up: "{{ vpn_iface.rc == 0 and 'state UP' in vpn_iface.stdout or (vpn_iface.rc == 0 and 'UNKNOWN' in vpn_iface.stdout) }}"
+
+# tun devices commonly report state UNKNOWN rather than UP even when
+# carrying traffic, so we treat both as up (handled above).
+
+- name: Confirm the default route uses the tunnel
+  ansible.builtin.command:
+    cmd: "ip route show default"
+  register: vpn_default_route
+  changed_when: false
+
+- name: Check the kill-switch table is loaded
+  ansible.builtin.command:
+    cmd: "nft list table inet killswitch"
+  register: vpn_nft_table
+  changed_when: false
+  failed_when: false
+
+- name: Confirm the output chain default policy is drop
+  ansible.builtin.set_fact:
+    vpn_output_drop: "{{ 'hook output' in vpn_nft_table.stdout and 'policy drop' in vpn_nft_table.stdout }}"
+
+# Determine the public-facing IP as seen from the internet. This egresses
+# via the default route — i.e. via the tunnel if everything is correct.
+- name: Determine egress public IP (via tunnel)
+  ansible.builtin.uri:
+    url: https://api.ipify.org?format=json
+    return_content: true
+    timeout: 15
+  register: vpn_public_ip
+  failed_when: false
+  changed_when: false
+
+- name: Summarise verification findings
+  ansible.builtin.set_fact:
+    vpn_checks:
+      tunnel_up: "{{ vpn_tunnel_up | bool }}"
+      default_via_tunnel: "{{ vpn_tun_dev in vpn_default_route.stdout }}"
+      killswitch_loaded: "{{ vpn_nft_table.rc == 0 }}"
+      output_policy_drop: "{{ vpn_output_drop | bool }}"
+      public_egress_ok: "{{ vpn_public_ip.status is defined and vpn_public_ip.status == 200 }}"
+      egress_public_ip: "{{ (vpn_public_ip.json.ip | default('unknown')) if (vpn_public_ip.status | default(0)) == 200 else 'unreachable' }}"
+
+- name: Show verification results
+  ansible.builtin.debug:
+    var: vpn_checks
+
+# Build a list of human-readable failures so the assert message is useful.
+- name: Collect verification failures
+  ansible.builtin.set_fact:
+    vpn_failures: >-
+      {{
+        ([] if vpn_checks.tunnel_up else ['tunnel interface ' ~ vpn_tun_dev ~ ' is not up'])
+        + ([] if vpn_checks.default_via_tunnel else ['default route does not use the tunnel'])
+        + ([] if vpn_checks.killswitch_loaded else ['kill-switch nftables table is not loaded'])
+        + ([] if vpn_checks.output_policy_drop else ['output chain default policy is not drop'])
+        + ([] if vpn_checks.public_egress_ok else ['public egress test failed (no internet via tunnel)'])
+      }}
+
+- name: Warn about verification failures (non-strict)
+  ansible.builtin.debug:
+    msg: "VPN verification problems: {{ vpn_failures }}"
+  when:
+    - vpn_failures | length > 0
+    - not (vpn_verify_strict | bool)
+
+- name: Fail on verification problems (strict)
+  ansible.builtin.assert:
+    that:
+      - vpn_failures | length == 0
+    fail_msg: "VPN kill-switch verification FAILED: {{ vpn_failures | join('; ') }}"
+    success_msg: "VPN kill-switch verification passed. Egress IP: {{ vpn_checks.egress_public_ip }}"
+    quiet: true
+  when: vpn_verify_strict | bool

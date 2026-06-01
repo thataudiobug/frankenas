@@ -18,15 +18,21 @@ import pytest
 
 from frankinception import paths, yaml_io
 from frankinception.bind_mapper import match_volume
-from frankinception.catalogs import CatalogKind, load_catalogs_for_groups
+from frankinception.catalogs import (
+    CatalogKind,
+    classify_catalog,
+    load_catalogs_for_groups,
+)
 from frankinception.compose_parser import parse_any, parse_compose, parse_docker_run
 from frankinception.hostvars import HostVars
 from frankinception.inventory import Inventory
 from frankinception.plays import describe, list_playbooks
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-FRANKENAS = REPO_ROOT / "frankenas"
+# This test file lives at frankenas/scripts/frankinception/tests/, so the
+# frankenas project root is three parents up (tests -> frankinception ->
+# scripts -> frankenas).
+FRANKENAS = Path(__file__).resolve().parents[3]
 INVENTORY = FRANKENAS / "inventories" / "prod"
 
 
@@ -58,9 +64,8 @@ def test_catalog_discovery_for_docker_host():
     groups = inv.all_groups_of("test-port-01")
     catalogs = load_catalogs_for_groups(INVENTORY / "group_vars", groups)
     names = {c.name for c in catalogs}
-    # Sanity: a docker+pct host should see all the major catalogs.
+    # Sanity: a docker+pct host should see all the major *selectable* catalogs.
     expected = {
-        "docker_bind_catalog",
         "docker_containers_catalog",
         "docker_groups_catalog",
         "compute_catalog",
@@ -70,11 +75,18 @@ def test_catalog_discovery_for_docker_host():
     }
     missing = expected - names
     assert not missing, f"missing catalogs: {missing}"
-    # docker_groups_catalog should be classed as MAPPING.
+    # Reference-marked catalogs (interpolated directly by plays) must NOT be
+    # surfaced as host-editable pickers.
+    assert "docker_bind_catalog" not in names
+    assert "api_catalog" not in names
+    # Selection kinds come from the marker comments in the catalog files.
     by_name = {c.name: c for c in catalogs}
-    assert by_name["docker_groups_catalog"].kind is CatalogKind.MAPPING
-    assert by_name["compute_catalog"].kind is CatalogKind.SCALAR
-    assert by_name["users_catalog"].kind is CatalogKind.LIST
+    assert by_name["docker_groups_catalog"].kind is CatalogKind.MULTI
+    assert by_name["compute_catalog"].kind is CatalogKind.SINGLE
+    assert by_name["users_catalog"].kind is CatalogKind.MULTI
+    assert by_name["network_catalog"].kind is CatalogKind.MULTI
+    # Companion var is always <stem>_enabled.
+    assert by_name["network_catalog"].enabled_var == "network_enabled"
 
 
 def test_inventory_roundtrip_preserves_layout(tmp_path):
@@ -88,7 +100,7 @@ def test_inventory_roundtrip_preserves_layout(tmp_path):
     assert yaml_io.load(dst) == yaml_io.load(src)
 
 
-def test_hostvars_set_mapping_preserves_overrides(tmp_path):
+def test_hostvars_set_multi_preserves_overrides(tmp_path):
     p = tmp_path / "host.yml"
     p.write_text(
         dedent(
@@ -105,14 +117,31 @@ def test_hostvars_set_mapping_preserves_overrides(tmp_path):
 
     class FakeCat:
         enabled_var = "docker_groups_enabled"
-        kind = CatalogKind.MAPPING
+        kind = CatalogKind.MULTI
 
-    hv.set_mapping(FakeCat(), ["public", "proxys"])
+    hv.set_multi(FakeCat(), ["public", "proxys"])
     assert "piracy" not in hv.raw["docker_groups_enabled"]
     assert "proxys" in hv.raw["docker_groups_enabled"]
     # The nested override for public.jellyfin must survive.
     public = hv.raw["docker_groups_enabled"]["public"]
     assert public["jellyfin"]["state"] == "stopped"
+
+
+def test_hostvars_set_multi_preserves_list_form(tmp_path):
+    """If the host already stores the selection as a plain list, keep it a
+    list (e.g. users_enabled: [casey, robot])."""
+    p = tmp_path / "host.yml"
+    p.write_text("users_enabled: [casey, robot]\n")
+    hv = HostVars(path=p, raw=yaml_io.load(p))
+
+    class FakeCat:
+        enabled_var = "users_enabled"
+        kind = CatalogKind.MULTI
+
+    hv.set_multi(FakeCat(), ["casey", "robot", "guest"])
+    sel = hv.raw["users_enabled"]
+    assert isinstance(sel, list)
+    assert list(sel) == ["casey", "robot", "guest"]
 
 
 def test_compose_parser_basic():
@@ -189,10 +218,22 @@ def test_parse_any_picks_compose_or_run():
     assert c2.name == "bar"
 
 
+def _load_bind_catalog_from_inventory() -> dict:
+    """Find docker_bind_catalog wherever it lives under group_vars.
+
+    The file has lived in both group_vars/all/ and group_vars/docker/ across
+    revisions; searching makes the test robust to its location (mirrors how
+    AppState discovers it via rglob).
+    """
+    for path in (INVENTORY / "group_vars").rglob("*.y*ml"):
+        data = yaml_io.load(path)
+        if isinstance(data, dict) and "docker_bind_catalog" in data:
+            return data["docker_bind_catalog"]
+    raise AssertionError("docker_bind_catalog not found anywhere under group_vars")
+
+
 def test_bind_mapper_rewrites_against_real_catalog():
-    bind_cat = yaml_io.load(
-        INVENTORY / "group_vars" / "all" / "mounts_catalog.yml"
-    )["docker_bind_catalog"]
+    bind_cat = _load_bind_catalog_from_inventory()
     m = match_volume("/Caleb/docker/configs/jellyfin/config:/config", bind_cat)
     assert m.bind_key == "config"
     assert m.rendered == (
@@ -793,3 +834,59 @@ def test_run_output_safe_write_silent_when_unmounted(tmp_path):
     # Should not raise — the early-return for unmounted is the whole point.
     screen._safe_write("anything")
     assert screen._plain_output == ["anything"]
+
+
+
+# ---- catalog comment markers ------------------------------------------------
+
+
+def _catalog_value(text: str):
+    """Load a single-catalog YAML doc and return the catalog's value node
+    (which carries the marker comment)."""
+    data = yaml_io.make_yaml().load(text)
+    key = next(iter(data))
+    return key, data[key]
+
+
+def test_marker_inline_pick_one():
+    name, val = _catalog_value("compute_catalog:  # pick one\n  small:\n    cores: 2\n")
+    spec = classify_catalog(name, val)
+    assert spec.kind is CatalogKind.SINGLE
+    assert spec.enabled_var == "compute_enabled"
+    assert spec.reference_only is False
+
+
+def test_marker_inline_pick_many():
+    name, val = _catalog_value("network_catalog:  # pick many\n  wan:\n    bridge: vmbr1\n")
+    spec = classify_catalog(name, val)
+    assert spec.kind is CatalogKind.MULTI
+    assert spec.enabled_var == "network_enabled"
+
+
+def test_marker_below_key():
+    # Marker on the line below the key is also honoured.
+    name, val = _catalog_value("users_catalog:\n  # pick many\n  casey:\n    key: x\n")
+    spec = classify_catalog(name, val)
+    assert spec.kind is CatalogKind.MULTI
+
+
+def test_marker_reference():
+    name, val = _catalog_value("docker_bind_catalog:  # reference\n  config:\n    mnt: /mnt/config\n")
+    spec = classify_catalog(name, val)
+    assert spec.reference_only is True
+
+
+def test_no_marker_defaults_to_single():
+    name, val = _catalog_value("mystery_catalog:\n  a:\n    x: 1\n")
+    spec = classify_catalog(name, val)
+    assert spec.kind is CatalogKind.SINGLE
+    assert spec.enabled_var == "mystery_enabled"
+
+
+def test_marker_case_insensitive_and_phrasing():
+    for marker in ("# Pick One", "# single", "# PICK-ONE"):
+        name, val = _catalog_value(f"foo_catalog:  {marker}\n  a:\n    x: 1\n")
+        assert classify_catalog(name, val).kind is CatalogKind.SINGLE
+    for marker in ("# pick many", "# MULTI", "# multiple"):
+        name, val = _catalog_value(f"bar_catalog:  {marker}\n  a:\n    x: 1\n")
+        assert classify_catalog(name, val).kind is CatalogKind.MULTI

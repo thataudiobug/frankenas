@@ -1,0 +1,22 @@
+# c2 (inventory key c2_ib_cmh_01) — the Ansible control node, OOB static
+# anchor (recovery path).
+#
+# c2 must resolve and connect to the fleet, so it cannot depend on the very
+# DNS/DHCP service it talks to before that service is up. It stays a
+# hand-pinned static anchor reachable by literal IP. dnsmasq also carries an
+# authoritative host-record c2.oob.frankenas.lan -> 10.128.0.3 so the name
+# resolves once the resolver is configured, but ansible_host stays the IP so
+# the control node is reachable even while its own resolver is unconfigured.
+ansible_host: 10.128.0.3
+
+os_enabled: "ubuntu"
+compute_enabled: "small"
+storage_enabled: "m8"
+users_enabled: [casey, robot]
+
+# WAN for upstream DNS forwarding + apt; OOB pinned static at the .3 anchor
+# (overrides the catalog default ip:dhcp -> forces static).
+network_enabled:
+  wan:
+  oob:
+    ip: "10.128.0.3"

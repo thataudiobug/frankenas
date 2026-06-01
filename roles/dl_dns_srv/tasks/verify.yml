@@ -1,0 +1,54 @@
+---
+# Standalone DHCP/DNS health checks. Safe to run on its own via a verify
+# play. With dns_srv_verify_strict, failures abort.
+#
+# Resolve the profile defensively: when included from main.yml `_dns` is
+# already set, but when this file is run stand-alone we rebuild it from the
+# catalog -> enabled -> overrides selection so the checks have their values.
+
+- name: Resolve the selected profile (if not already bound)
+  ansible.builtin.set_fact:
+    _dns: >-
+      {{
+        dns_srv_catalog[dns_srv_enabled]
+        | combine(dns_srv_overrides | default({}, true), recursive=True)
+      }}
+  when: _dns is not defined
+
+- name: dnsmasq service is active
+  ansible.builtin.command: systemctl is-active dnsmasq
+  register: _dns_active
+  changed_when: false
+  failed_when: dns_srv_verify_strict | bool and _dns_active.stdout != "active"
+
+- name: dnsmasq is listening on :53 (DNS) on the OOB IP
+  ansible.builtin.command: "ss -lunp sport = :53"
+  register: _dns_listen
+  changed_when: false
+  failed_when: >-
+    dns_srv_verify_strict | bool and
+    (_dns.self_ip not in _dns_listen.stdout
+     and '0.0.0.0' not in _dns_listen.stdout)
+
+- name: dnsmasq is listening for DHCP on :67
+  ansible.builtin.command: "ss -lunp sport = :67"
+  register: _dhcp_listen
+  changed_when: false
+  failed_when: dns_srv_verify_strict | bool and _dhcp_listen.rc != 0
+
+# Resolve a known static anchor through dnsmasq itself — proves the zone is
+# authoritative and answering.
+- name: Resolve a static anchor through dnsmasq (authoritative zone check)
+  ansible.builtin.command: >-
+    dig +short @127.0.0.1 dl-dns-srv.{{ _dns.domain }} A
+  register: _dig_anchor
+  changed_when: false
+  failed_when: >-
+    dns_srv_verify_strict | bool and
+    _dns.self_ip not in _dig_anchor.stdout
+
+- name: Show verification results
+  ansible.builtin.debug:
+    msg:
+      service: "{{ _dns_active.stdout }}"
+      anchor_resolves_to: "{{ _dig_anchor.stdout }}"

@@ -1,0 +1,27 @@
+# {{ ansible_managed }}
+# OOB management DHCP + DNS drop-in for {{ _dns.domain }}.
+
+# -- Internal zone ------------------------------------------------------
+domain={{ _dns.domain }}
+local=/{{ _dns.domain }}/
+expand-hosts
+# Don't forward reverse lookups for our private range upstream.
+bogus-priv
+
+# -- Static anchors (authoritative; never leased) ----------------------
+{% for h in _dns.static_hosts %}
+host-record={{ h.name }}.{{ _dns.domain }},{{ h.ip }}
+{% endfor %}
+
+# -- DHCP (OOB scope only) ---------------------------------------------
+dhcp-authoritative
+dhcp-range={{ _dns.dhcp_start }},{{ _dns.dhcp_end }},{{ _dns.oob_netmask }},{{ _dns.dhcp_lease }}
+# OOB has NO gateway (default route lives on each host's WAN NIC), so we
+# send an empty router option to stop clients installing a bogus default.
+dhcp-option=option:router
+# Hand clients this resolver and search domain.
+dhcp-option=option:dns-server,{{ _dns.self_ip }}
+dhcp-option=option:domain-search,{{ _dns.domain }}
+
+# -- Lease persistence --------------------------------------------------
+dhcp-leasefile=/var/lib/misc/dnsmasq.leases

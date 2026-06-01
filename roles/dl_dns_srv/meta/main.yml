@@ -1,0 +1,17 @@
+galaxy_info:
+  author: frankenas
+  description: >-
+    Combined DHCP + DNS server (dnsmasq) for the out-of-band management
+    network. Leases addresses on the OOB segment and auto-registers lease
+    hostnames into the authoritative internal zone oob.frankenas.lan, so
+    ansible_host can be an FQDN instead of a static IP.
+  license: MIT
+  min_ansible_version: "2.12"
+  galaxy_tags:
+    - dns
+    - dhcp
+    - dnsmasq
+    - networking
+    - infrastructure
+
+dependencies: []

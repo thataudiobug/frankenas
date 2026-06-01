@@ -1,0 +1,24 @@
+# pve — Proxmox VE hypervisor, OOB static anchor (recovery path).
+#
+# pve is the baremetal hypervisor, NOT a pve_dl-built droplet, so it carries
+# no compute/storage/os catalog vars — those drive CT/VM creation and do not
+# apply to the host itself. It is pinned here as a recovery-path static
+# anchor: it must stay reachable by literal IP so the fleet can bootstrap and
+# be repaired without depending on the DHCP/DNS service it underpins.
+#
+# ansible_host is the OOB management anchor (10.128.0.1). The Proxmox API is
+# reached separately at the literal WAN address 192.168.1.100 (hardcoded as
+# api_host in the pve_dl role tasks), so API reachability is unaffected by
+# this value; only SSH/pvesh management traffic moves onto the OOB segment.
+ansible_host: 10.128.0.1
+
+# Static-anchor NIC pinning. For this baremetal host the override is
+# documentary (pve's NICs are configured on Proxmox, not by build_networks),
+# but the anchor model requires pinning the OOB address. The WAN NIC keeps
+# pve's fixed Proxmox management/API address; the OOB NIC is pinned to the .1
+# anchor, overriding the catalog default ip:dhcp.
+network_enabled:
+  wan:
+    ip: "192.168.1.100"
+  oob:
+    ip: "10.128.0.1"

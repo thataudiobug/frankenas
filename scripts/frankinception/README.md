@@ -4,18 +4,19 @@ TUI utility for managing the frankenas Ansible inventory over SSH.
 
 ## Install
 
-From the C2 host:
+The tool lives alongside the Ansible code at `frankenas/scripts/frankinception`,
+so a single clone of the frankenas repo brings it along. From the C2 host:
 
 ```bash
 python3 -m venv ~/.venvs/frankinception
-~/.venvs/frankinception/bin/pip install -e ~/Projects/frankinception/tools/frankinception
+~/.venvs/frankinception/bin/pip install -e ~/frankenas/scripts/frankinception
 ~/.venvs/frankinception/bin/frankinception
 ```
 
 Or with pipx:
 
 ```bash
-pipx install ~/Projects/frankinception/tools/frankinception
+pipx install ~/frankenas/scripts/frankinception
 frankinception
 ```
 

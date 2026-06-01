@@ -11,4 +11,4 @@ except PackageNotFoundError:
     # Falls back when running from a checkout that hasn't been installed
     # (e.g. ``python -m frankinception`` from the source tree). Keep this
     # in step with pyproject.toml on bumps.
-    __version__ = "0.7.2"
+    __version__ = "0.10.0"

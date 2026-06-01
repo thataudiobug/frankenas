@@ -55,49 +55,42 @@ class HostVars:
         sel = self.selection(catalog)
         if sel is None:
             return []
-        if catalog.kind is CatalogKind.SCALAR:
+        if catalog.kind is CatalogKind.SINGLE:
             return [str(sel)] if sel else []
-        if catalog.kind is CatalogKind.LIST:
-            return [str(k) for k in sel] if isinstance(sel, list) else []
-        # MAPPING
+        # MULTI — stored as either a list or a mapping of key -> overrides.
         if isinstance(sel, dict):
             return list(sel.keys())
+        if isinstance(sel, list):
+            return [str(k) for k in sel]
         return []
 
-    def set_scalar(self, catalog: Catalog, value: str | None) -> None:
+    def set_single(self, catalog: Catalog, value: str | None) -> None:
         if value is None or value == "":
             self.unset(catalog.enabled_var)
         else:
             self.raw[catalog.enabled_var] = value
 
-    def set_list(self, catalog: Catalog, values: list[str]) -> None:
-        seq = yaml_io.empty_seq()
-        for v in values:
-            seq.append(v)
-        if seq:
-            self.raw[catalog.enabled_var] = seq
-        else:
-            # Match the existing repo style: keep the key with an empty value
-            # rather than removing it entirely. Users sometimes leave an
-            # empty placeholder block. We remove only if the key isn't there.
-            self.raw[catalog.enabled_var] = seq
+    def set_multi(self, catalog: Catalog, keys: list[str]) -> None:
+        """Write a multi-select selection, preserving the host's storage form.
 
-    def set_mapping(self, catalog: Catalog, keys: list[str]) -> None:
-        """For mapping-style catalogs, write ``{key: ~, ...}``.
-
-        Existing per-key overrides for surviving keys are preserved; entries
-        for removed keys are dropped.
+        If the host already stores this var as a plain list, keep it a list.
+        Otherwise use a mapping of ``{key: <existing overrides or None>}`` —
+        the more capable form, since it lets a key carry per-entry overrides
+        (e.g. a network's ``ip``/``host``). Per-key overrides for surviving
+        keys are preserved across edits; entries for removed keys are dropped.
         """
         existing = self.raw.get(catalog.enabled_var)
+        if isinstance(existing, list) and not isinstance(existing, dict):
+            seq = yaml_io.empty_seq()
+            for k in keys:
+                seq.append(k)
+            self.raw[catalog.enabled_var] = seq
+            return
         merged = yaml_io.empty_map()
-        if isinstance(existing, dict):
-            for k in keys:
-                if k in existing:
-                    merged[k] = existing[k]
-                else:
-                    merged[k] = None
-        else:
-            for k in keys:
+        for k in keys:
+            if isinstance(existing, dict) and k in existing:
+                merged[k] = existing[k]
+            else:
                 merged[k] = None
         self.raw[catalog.enabled_var] = merged
 

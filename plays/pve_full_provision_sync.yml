@@ -1,0 +1,10 @@
+- name: Provision PVE Droplets
+  hosts: localhost
+  gatherfacts: false
+
+  vars:
+    target_hosts: "{{ groups['droplets'] }}"
+
+  tasks:
+    - name: Create VMs
+    

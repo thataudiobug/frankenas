@@ -1,4 +1,4 @@
-docker_bind_catalog:
+docker_bind_catalog:  # reference
   media:
     src: "/essek/media"
     mnt: "/mnt/media"

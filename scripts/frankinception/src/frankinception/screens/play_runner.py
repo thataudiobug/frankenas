@@ -79,7 +79,7 @@ class PlayRunnerScreen(Screen):
                 yield Checkbox(
                     "Use vault (prompts for password if needed)",
                     id="vault-cb",
-                    value=False,
+                    value=True,
                 )
             with Horizontal(id="play-extra"):
                 yield Label("Extra ansible-playbook flags:")

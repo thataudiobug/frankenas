@@ -131,7 +131,7 @@ class HostEditorScreen(Screen):
     def _edit_catalog(self, catalog: Catalog) -> None:
         host_vars = self.state.host_vars(self.host)
 
-        if catalog.kind is CatalogKind.SCALAR:
+        if catalog.kind is CatalogKind.SINGLE:
             current = host_vars.selection(catalog)
             current_str = str(current) if current is not None else None
 
@@ -140,7 +140,7 @@ class HostEditorScreen(Screen):
                 # any return as the new value (we passed current into it).
                 if result == current_str:
                     return
-                host_vars.set_scalar(catalog, result)
+                host_vars.set_single(catalog, result)
                 self._dirty = True
                 self._refill_catalog_table(self.query_one("#catalog-table", DataTable))
 
@@ -156,10 +156,7 @@ class HostEditorScreen(Screen):
             def _on_multi(result: list[str] | None) -> None:
                 if result is None:
                     return
-                if catalog.kind is CatalogKind.LIST:
-                    host_vars.set_list(catalog, result)
-                else:
-                    host_vars.set_mapping(catalog, result)
+                host_vars.set_multi(catalog, result)
                 self._dirty = True
                 self._refill_catalog_table(self.query_one("#catalog-table", DataTable))
 
@@ -203,13 +200,13 @@ class HostEditorScreen(Screen):
         self._catalogs = catalogs  # keep for row lookup
         for cat in catalogs:
             selection = host_vars.selected_keys(cat)
-            if cat.kind is CatalogKind.SCALAR:
+            if cat.kind is CatalogKind.SINGLE:
                 shown = selection[0] if selection else "—"
             else:
                 shown = ", ".join(selection) if selection else "—"
             table.add_row(
                 cat.display_name,
-                cat.kind.value,
+                "pick one" if cat.kind is CatalogKind.SINGLE else "pick many",
                 cat.group,
                 shown,
                 key=cat.name,

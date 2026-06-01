@@ -1,0 +1,44 @@
+---
+# DNS/DHCP server catalog for the dl_dns_srv role.
+#
+# Each entry is a selectable dnsmasq server profile. A host picks one by
+# setting `dns_srv_enabled: <key>` in its host_vars, and may tweak
+# individual fields with `dns_srv_overrides:` (merged over the profile).
+# This is the same catalog -> enabled -> overrides pattern used by
+# compute_catalog/compute_enabled and the docker container overrides.
+#
+# Discoverable by frankinception's catalog->enabled framework (key ends in
+# `_catalog`); `# pick one` marks it single-select.
+#
+# Profile fields:
+#   domain        authoritative internal DNS zone
+#   oob_cidr      OOB management CIDR this server owns
+#   oob_netmask   netmask handed out via DHCP (matches the CIDR prefix)
+#   self_ip       this CT's static OOB IP (DNS listen + dhcp dns-server opt)
+#   oob_iface     OOB NIC dnsmasq serves on (eth1 when WAN is net0)
+#   wan_iface     WAN NIC, excluded from DHCP/DNS
+#   dhcp_start    DHCP pool start (must exclude the static anchor block)
+#   dhcp_end      DHCP pool end
+#   dhcp_lease    lease time
+#   static_hosts  authoritative anchor A records (never leased)
+#   upstream_dns  forwarders for non-internal queries
+
+dns_srv_catalog:  # pick one
+  oob:
+    domain: "oob.frankenas.lan"
+    oob_cidr: "10.128.0.0/9"
+    oob_netmask: "255.128.0.0"          # /9
+    self_ip: "10.128.0.2"
+    oob_iface: "eth1"
+    wan_iface: "eth0"
+    dhcp_start: "10.128.0.10"           # excludes anchor block .1-.9
+    dhcp_end: "10.128.255.254"
+    dhcp_lease: "12h"
+    # Recovery-path anchors: authoritative A records, never leased.
+    static_hosts:
+      - {name: "pve",        ip: "10.128.0.1"}
+      - {name: "dl-dns-srv", ip: "10.128.0.2"}
+      - {name: "c2",         ip: "10.128.0.3"}
+    upstream_dns:
+      - "1.1.1.1"
+      - "9.9.9.9"

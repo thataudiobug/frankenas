@@ -1,0 +1,46 @@
+# Deploy the OOB DHCP+DNS server (dnsmasq) to the dns_srv group.
+#
+# ORDER MATTERS (bootstrap): this CT is a static anchor and must exist and
+# be serving before any DHCP-only host is built. Run this BEFORE the bulk
+# droplet provision, and ensure C2's resolver points at 10.128.0.2 for
+# oob.frankenas.lan (a C2 provisioning step) before relying on FQDNs.
+#
+#   ansible-playbook plays/dns_srv_deploy.yml --limit dl-dns-srv
+#
+# Build order (each step depends on the previous one being healthy):
+#   1. PVE 10.128.0.1 reachable        - hypervisor / Proxmox API up; the
+#                                        static anchor that builds everything.
+#   2. dnsmasq CT 10.128.0.2 serving   - this play. Phase 1 builds the CT with
+#                                        its static OOB IP, Phase 2 brings up
+#                                        dnsmasq DHCP+DNS. Now leases and the
+#                                        oob.frankenas.lan zone are answered.
+#   3. C2 10.128.0.3 resolver config   - point C2's resolver at 10.128.0.2 for
+#                                        oob.frankenas.lan (out of scope for the
+#                                        dl_dns_srv role; a C2 provisioning step
+#                                        in plays/provision_c2.yml). Until this
+#                                        is true, FQDN ansible_host can't resolve.
+#   4. dynamic hosts provisioned       - DHCP-only hosts built last. Each sends
+#                                        its hostname, leases an address, and is
+#                                        auto-registered as <host>.oob.frankenas.lan.
+#
+# Failure mode of skipping the order: if a DHCP-only host is built before this
+# dnsmasq CT exists and serves, it gets no lease (no ansible_host IP) and no DNS
+# record, so the build play's `wait_for` on the SSH port times out. The fix is
+# purely deploy ordering (run this play first) - not a code change in the role.
+---
+# Phase 1: build the CT on Proxmox (static OOB IP via host_vars override)
+- name: Provision the dl_dns_srv container
+  hosts: localhost
+  gather_facts: false
+  vars:
+    target_hosts: "{{ groups['dns_srv'] }}"
+  roles:
+    - pve_dl            # builds the CT (static oob 10.128.0.2)
+
+# Phase 2: configure dnsmasq on the CT itself
+- name: Configure dnsmasq DHCP + DNS
+  hosts: dns_srv
+  gather_facts: true
+  become: true
+  roles:
+    - dl_dns_srv

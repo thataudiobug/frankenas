@@ -4,11 +4,30 @@ A catalog is any top-level mapping key in a ``group_vars/<group>/*.yml`` file
 whose name ends in ``_catalog``. The tool surfaces these dynamically so new
 catalogs work without code changes.
 
-For each catalog we also infer the *enabled* host-var name. The convention
-used in this repo is ``foo_catalog`` paired with ``foo_enabled`` in
-``host_vars/<host>.yml``. We also handle the special docker pair
-``docker_groups_catalog`` <-> ``docker_groups_enabled`` (whose value is a
-mapping rather than a scalar).
+Each catalog declares its own selection behaviour with a **marker comment**
+written directly on the catalog key — the data describes itself, with no
+second source of truth::
+
+    compute_catalog:        # pick one
+      small: {cores: 2}
+      large: {cores: 6}
+
+    network_catalog:        # pick many
+      wan: {...}
+      oob: {...}
+
+    docker_bind_catalog:    # reference
+      config: {...}
+
+* ``pick one``  → the host-var ``<stem>_enabled`` holds a single key.
+* ``pick many`` → it holds many keys (a mapping, or a list if the host
+  already uses one).
+* ``reference`` → an interpolation table, not a per-host selection; hidden
+  from the host editor.
+
+No marker defaults to ``pick one`` (the safe default). The marker lives in a
+comment, so it never changes the YAML data Ansible loads — ruamel preserves
+it on round-trip. The companion host-var is always ``<stem>_enabled``.
 """
 
 from __future__ import annotations
@@ -22,25 +41,114 @@ from . import yaml_io
 
 
 class CatalogKind(str, Enum):
-    """How the host_vars side of this catalog stores its selection."""
+    """How the host_vars side of this catalog stores its selection.
 
-    SCALAR = "scalar"
-    """``foo_enabled: "small"`` — single key from the catalog."""
+    The user only ever declares cardinality (pick one vs pick many) via a
+    marker comment in the catalog file. SINGLE maps to "pick one"; MULTI
+    maps to "pick many". The on-disk storage form for MULTI (plain list vs
+    mapping-with-overrides) is decided at write time to match whatever the
+    host already has, defaulting to a mapping for new selections.
+    """
 
-    LIST = "list"
-    """``users_enabled: [casey, robot]`` — multiple keys."""
+    SINGLE = "single"
+    """``foo_enabled: "small"`` — exactly one key from the catalog."""
 
-    MAPPING = "mapping"
-    """``docker_groups_enabled: {public:, piracy:}`` — multiple keys w/ option for nested overrides."""
+    MULTI = "multi"
+    """``foo_enabled: {a:, b:}`` or ``[a, b]`` — any number of keys."""
 
 
-# Catalogs that don't follow the simple ``foo_catalog -> foo_enabled`` rule.
-# Mapped to (enabled_var_name, kind).
-_OVERRIDES: dict[str, tuple[str, CatalogKind]] = {
-    "docker_groups_catalog": ("docker_groups_enabled", CatalogKind.MAPPING),
-    "docker_containers_catalog": ("docker_containers_enabled", CatalogKind.MAPPING),
-    "users_catalog": ("users_enabled", CatalogKind.LIST),
-}
+# Marker comments a catalog author writes to declare cardinality. Matched
+# case-insensitively anywhere in the comment attached to the catalog's
+# value (inline after the key, or on the line(s) directly below it).
+_PICK_ONE_MARKERS = ("pick one", "pick-one", "pickone", "single")
+_PICK_MANY_MARKERS = ("pick many", "pick-many", "pickmany", "multi", "multiple")
+
+# Reference-only marker: a table interpolated directly by plays rather than
+# selected per-host (e.g. docker_bind_catalog). Hidden from the host editor.
+_REFERENCE_MARKERS = ("reference", "reference only", "reference-only", "no-select")
+
+
+@dataclass(frozen=True)
+class CatalogSpec:
+    """Resolved treatment for one catalog.
+
+    ``enabled_var`` is the companion host-var (always ``<stem>_enabled``);
+    ``kind`` is SINGLE or MULTI; ``reference_only`` hides reference tables
+    from the host editor.
+    """
+
+    enabled_var: str
+    kind: CatalogKind
+    reference_only: bool = False
+
+
+def _spec_for(name: str, kind: CatalogKind, reference_only: bool = False) -> CatalogSpec:
+    stem = name.removesuffix("_catalog")
+    return CatalogSpec(f"{stem}_enabled", kind, reference_only)
+
+
+def _marker_from_comment(text: str) -> CatalogSpec | None:
+    """Parse a cardinality marker out of a comment string.
+
+    Returns a partial spec (enabled_var filled by the caller) or None if
+    no recognised marker is present. Checked in priority order:
+    reference-only > pick many > pick one.
+    """
+    low = text.lower()
+    if any(m in low for m in _REFERENCE_MARKERS):
+        return CatalogSpec("", CatalogKind.SINGLE, reference_only=True)
+    if any(m in low for m in _PICK_MANY_MARKERS):
+        return CatalogSpec("", CatalogKind.MULTI)
+    if any(m in low for m in _PICK_ONE_MARKERS):
+        return CatalogSpec("", CatalogKind.SINGLE)
+    return None
+
+
+def _comment_tokens(value: Any) -> list[str]:
+    """Collect comment strings attached to a loaded YAML value.
+
+    ruamel stashes the comment that follows a mapping key on the *value's*
+    ``ca.comment``: slot [0] is the inline comment (``key:  # ...``), slot
+    [1] is a list of comments on the following indented lines. We read both
+    so the author can write the marker either way.
+    """
+    out: list[str] = []
+    ca = getattr(value, "ca", None)
+    if ca is None:
+        return out
+    comment = getattr(ca, "comment", None)
+    if not comment:
+        return out
+    # comment is [inline_token_or_None, [following_tokens] or None]
+    inline = comment[0] if len(comment) > 0 else None
+    if inline is not None:
+        out.append(str(inline.value))
+    following = comment[1] if len(comment) > 1 else None
+    if following:
+        for tok in following:
+            if tok is not None:
+                out.append(str(tok.value))
+    return out
+
+
+def classify_catalog(name: str, value: Any) -> CatalogSpec:
+    """Determine a catalog's spec from its marker comment.
+
+    The catalog declares its own behaviour with a comment:
+
+        compute_catalog:   # pick one
+        network_catalog:   # pick many
+        docker_bind_catalog:  # reference
+
+    Falls back to SINGLE ("pick one") when no marker is present, which is
+    the safe default — a stray multi-write is more surprising than making
+    the user add a marker to opt into multi-select.
+    """
+    for text in _comment_tokens(value):
+        partial = _marker_from_comment(text)
+        if partial is not None:
+            return _spec_for(name, partial.kind, partial.reference_only)
+    return _spec_for(name, CatalogKind.SINGLE)
 
 
 @dataclass
@@ -72,13 +180,6 @@ class Catalog:
         return stem.replace("_", " ").title() or self.name
 
 
-def _classify(name: str) -> tuple[str, CatalogKind]:
-    if name in _OVERRIDES:
-        return _OVERRIDES[name]
-    stem = name.removesuffix("_catalog")
-    return f"{stem}_enabled", CatalogKind.SCALAR
-
-
 def _iter_yaml_files(group_dir: Path) -> Iterable[Path]:
     if not group_dir.is_dir():
         return []
@@ -86,13 +187,14 @@ def _iter_yaml_files(group_dir: Path) -> Iterable[Path]:
 
 
 def load_catalogs_for_groups(
-    group_vars_root: Path, groups: Iterable[str]
+    group_vars_root: Path,
+    groups: Iterable[str],
 ) -> list[Catalog]:
-    """Return every ``*_catalog`` exposed by the listed groups (and ``all``).
+    """Return every selectable ``*_catalog`` exposed by the listed groups.
 
-    Catalogs are returned in (group, name) order. Duplicate names across
-    groups are kept — the UI can decide which to show, but in practice the
-    repo doesn't repeat them.
+    Each catalog's behaviour is read from its own marker comment (see
+    :func:`classify_catalog`). Catalogs are returned in (group, name) order.
+    Reference-only catalogs are skipped since they aren't per-host selections.
     """
     seen: dict[tuple[str, str], Catalog] = {}
     # The 'all' group always applies.
@@ -113,11 +215,13 @@ def load_catalogs_for_groups(
                     continue
                 if not isinstance(value, dict):
                     continue
-                enabled_var, kind = _classify(key)
+                spec = classify_catalog(key, value)
+                if spec.reference_only:
+                    continue
                 cat = Catalog(
                     name=key,
-                    enabled_var=enabled_var,
-                    kind=kind,
+                    enabled_var=spec.enabled_var,
+                    kind=spec.kind,
                     group=group,
                     source_file=fpath,
                     entries=dict(value),

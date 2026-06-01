@@ -5,7 +5,7 @@
     user: root
     key: "{{ users_enabled
              | select('in', users_catalog)
-             | map('extract', users_catalog, 'pub_key')
+             | map('extract', users_catalog, 'key')
              | list
              | join('\n') }}"
     state: present
@@ -15,7 +15,7 @@
 - name: Update User Creds (qemu droplets)
   authorized_key:
     user: casey
-    key: '{{ users_catalog.casey.pub_key }}'
+    key: '{{ users_catalog.casey.key }}'
     state: present
     exclusive: true
   when: ansible_facts['virtualization_type'] == "qemu"
@@ -23,7 +23,7 @@
 - name: Update Robot Creds (qemu droplets)
   authorized_key:
     user: robot
-    key: '{{ users_catalog.robot.pub_key }}'
+    key: '{{ users_catalog.robot.key }}'
     state: present
     exclusive: true
   when: ansible_facts['virtualization_type'] == "qemu"

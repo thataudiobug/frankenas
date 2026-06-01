@@ -1,0 +1,43 @@
+---
+# defaults file for dl_dns_srv
+#
+# Combined DHCP + DNS for the out-of-band management network using dnsmasq.
+# DHCP scope is OOB-ONLY (vmbr0 / 10.128.0.0/9). The WAN router keeps owning
+# WAN DHCP — this role must never answer DHCP on the WAN segment.
+#
+# Configuration follows the project's catalog -> enabled -> overrides
+# pattern (same shape as compute_catalog -> compute_enabled, and
+# ovpn_server_catalog -> ovpn_server_enabled in dl_vpn_client):
+#
+#   * dns_srv_catalog   (group_vars) — named server profiles; the bulk of
+#                        the config. Discoverable by frankinception's
+#                        catalog->enabled framework (key ends in _catalog).
+#   * dns_srv_enabled   (host_var)   — picks one profile by key ("pick one").
+#   * dns_srv_overrides (host_var)   — optional per-host field tweaks merged
+#                        over the selected profile (e.g. a different OOB NIC
+#                        index on a host whose NIC ordering differs).
+#
+# A profile entry shape (see group_vars/dns_srv/dns_srv_catalog.yml):
+#
+#   dns_srv_catalog:
+#     oob:
+#       domain: "oob.frankenas.lan"
+#       oob_cidr: "10.128.0.0/9"
+#       oob_netmask: "255.128.0.0"
+#       self_ip: "10.128.0.2"
+#       oob_iface: "eth1"
+#       wan_iface: "eth0"
+#       dhcp_start: "10.128.0.10"
+#       dhcp_end: "10.128.255.254"
+#       dhcp_lease: "12h"
+#       static_hosts: [{name: pve, ip: 10.128.0.1}, ...]
+#       upstream_dns: ["1.1.1.1", "9.9.9.9"]
+
+dns_srv_catalog: {}
+dns_srv_enabled: ""
+dns_srv_overrides: {}
+
+# -- Verification -------------------------------------------------------
+# Operational toggle (not part of a server profile): when true, verify.yml
+# hard-fails the play if DHCP/DNS isn't healthy.
+dns_srv_verify_strict: true

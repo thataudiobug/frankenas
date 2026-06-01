@@ -1,0 +1,83 @@
+---
+# defaults file for dl_vpn_client
+#
+# This role configures an Ubuntu host as an OpenVPN *client* with a
+# fail-closed (kill-switch) firewall: WAN traffic may ONLY leave via the
+# tunnel. If the tunnel drops, all non-management WAN egress is blocked.
+
+# -- Management network -------------------------------------------------
+#
+# CRITICAL: this subnet is allowed through the kill switch so the C2 box
+# can keep reaching the host over SSH/Ansible. It must match the real
+# management CIDR — an empty or wrong value will either lock you out or
+# punch a hole in the kill switch.
+#
+# 10.128.0.0/9 covers 10.128.0.0–10.255.255.255, the management address
+# space for this fleet.
+vpn_mgmt_cidr: "10.128.0.0/9"
+
+# Extra CIDRs that should also bypass the tunnel (e.g. a secondary
+# management or monitoring net). Usually empty.
+vpn_local_allow_cidrs: []
+
+# -- Server selection (catalog -> enabled framework) --------------------
+#
+# Pick which VPN server this host connects to by setting
+# ``ovpn_server_enabled`` (host_var) to a key in ``ovpn_server_catalog``
+# (group_var). Everything else — endpoint host, port, protocol — is
+# inferred by parsing the selected .ovpn file, so there's nothing else to
+# keep in sync.
+#
+# Catalog shape (e.g. group_vars/vpn_client/vpn_server_catalog.yml):
+#
+#   ovpn_server_catalog:
+#     us-east-1:
+#       ovpn_file: "{{ vault_us_east_1_ovpn }}"   # full .ovpn text
+#       ovpn_user: "{{ vault_us_east_1_user }}"
+#       ovpn_pass: "{{ vault_us_east_1_pass }}"
+#
+# And in host_vars:
+#   ovpn_server_enabled: us-east-1
+ovpn_server_catalog: {}
+ovpn_server_enabled: ""
+
+# -- Endpoint override (advanced) --------------------------------------
+#
+# Normally the role resolves each ``remote`` host in the .ovpn to its IPs
+# at provision time (the dig lookup runs on the control node). If your
+# control node resolves the endpoint differently from the target (geo-DNS)
+# or DNS is unavailable, pin the firewall bootstrap rules explicitly here
+# as a list of {ip, port, proto} dicts:
+#
+#   vpn_endpoint_rules_override:
+#     - {ip: "203.0.113.10", port: 1194, proto: udp}
+vpn_endpoint_rules_override: []
+
+# -- Service / device ---------------------------------------------------
+vpn_tun_dev: "tun0"
+# systemd unit instance name → /etc/openvpn/client/<name>.conf and the
+# openvpn-client@<name> service.
+vpn_client_name: "client"
+
+# -- DNS ----------------------------------------------------------------
+#
+# Resolvers used once the tunnel is up. With redirect-gateway the default
+# route is the tunnel, so DNS to these public IPs is encrypted. Set to the
+# VPN provider's resolver if they push one, or a public resolver you trust.
+vpn_dns_servers:
+  - "1.1.1.1"
+  - "9.9.9.9"
+
+# -- IPv6 ---------------------------------------------------------------
+#
+# Most consumer VPN configs are IPv4-only and IPv6 will route around the
+# tunnel in the clear. The kill switch drops v6 by default (inet table),
+# but we also disable it via sysctl unless the tunnel carries v6.
+vpn_disable_ipv6: true
+
+# -- Verification -------------------------------------------------------
+#
+# When true, the role's verification tasks hard-fail the play if a leak
+# is detected (tunnel down, or egress not via the tunnel). Leave true for
+# safety; set false only for debugging.
+vpn_verify_strict: true

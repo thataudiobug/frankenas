@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "frankinception"
-version = "0.7.2"
+version = "0.10.0"
 description = "TUI utility for managing the frankenas Ansible inventory"
 requires-python = ">=3.10"
 dependencies = [

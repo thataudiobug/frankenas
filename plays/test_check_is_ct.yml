@@ -1,0 +1,31 @@
+- hosts: localhost
+
+  vars:
+    thing: test-port-01
+
+  tasks:
+  - name: Does CT exists
+    community.proxmox.proxmox_vm_info:
+      node: pve
+      api_user: robot@pam
+      api_host: 192.168.1.100
+      api_token_id: robot_token
+      api_token_secret: "{{ pve_api_key }}"
+      type: lxc
+      name: '{{ thing }}'
+    register: does_ct
+
+  - name: Sanatise
+    set_fact:
+      ct: >-
+        {{ (does_ct.proxmox_vms
+           | selectattr('name','equalto','{{ thing }}')
+           | list
+           | first) | default({}) }}
+
+  - debug:
+      var: ct
+
+  - name: print does ct exist
+    ansible.builtin.shell: echo "host is found"
+    when: does_ct.proxmox_vms
