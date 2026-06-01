@@ -1,0 +1,11 @@
+ansible_host: testport02
+users_enabled:
+  casey:
+  robot:
+compute_enabled: small
+network_enabled:
+  oob:
+  wan:
+os_enabled: ubuntu
+storage_enabled: s8
+ovpn_server_enabled: ca_toronto

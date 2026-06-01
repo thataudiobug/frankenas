@@ -1,0 +1,12 @@
+ansible_host: 10.128.0.2
+users_enabled:
+  robot:
+  casey:
+dns_srv_enabled: oob
+compute_enabled: small
+network_enabled:
+  wan:
+  oob:
+    ip: 10.128.0.2/9
+os_enabled: ubuntu
+storage_enabled: s8
