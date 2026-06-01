@@ -30,10 +30,9 @@
 ---
 # Phase 1: build the CT on Proxmox (static OOB IP via host_vars override)
 - name: Provision the dl_dns_srv container
-  hosts: localhost
+  hosts: dns_srv
   gather_facts: false
-  vars:
-    target_hosts: "{{ groups['dns_srv'] }}"
+  connection: local
   roles:
     - pve_dl            # builds the CT (static oob 10.128.0.2)
 
