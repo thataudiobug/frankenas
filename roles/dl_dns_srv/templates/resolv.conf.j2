@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# Local lookups go to dnsmasq on the loopback; the systemd-resolved
+# stub listener is disabled (see 10-disable-stub.conf).
+nameserver 127.0.0.1
+search {{ _dns.domain }}
