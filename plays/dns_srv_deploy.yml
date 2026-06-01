@@ -28,7 +28,11 @@
 # record, so the build play's `wait_for` on the SSH port times out. The fix is
 # purely deploy ordering (run this play first) - not a code change in the role.
 ---
-# Phase 1: build the CT on Proxmox (static OOB IP via host_vars override)
+# Phase 1: build the CT on Proxmox. Runs against the dns_srv group with a
+# local connection (the build talks to the Proxmox API from the control
+# node — the CT doesn't exist to SSH into yet), exactly like
+# docker_fleet_deploy's provision phase. pve_dl keys off inventory_hostname,
+# so the group (not localhost) must be the play's hosts.
 - name: Provision the dl_dns_srv container
   hosts: dns_srv
   gather_facts: false
@@ -36,7 +40,7 @@
   roles:
     - pve_dl            # builds the CT (static oob 10.128.0.2)
 
-# Phase 2: configure dnsmasq on the CT itself
+# Phase 2: configure dnsmasq on the CT itself (over SSH)
 - name: Configure dnsmasq DHCP + DNS
   hosts: dns_srv
   gather_facts: true
