@@ -5,16 +5,7 @@
     pct_netif: >-
       {{
         pct_netif | default({}) | combine({
-          'net' ~ item.index: (
-            'name=eth' ~ item.index
-            ~ (
-              ',ip=dhcp' if item.dhcp | bool
-              else ',ip=' ~ item.ip ~ '/' ~ item.subnet
-                   ~ (',gw=' ~ item.gateway if item.gateway | length > 0 else '')
-            )
-            ~ ',bridge=' ~ item.bridge
-            ~ ',firewall=0'
-          )
+          'net' ~ item.index: (item.props.items() | map('join', '=') | join(','))
         })
       }}
   loop: "{{ resolved_networks }}"
@@ -58,10 +49,25 @@
     netif: "{{ pct_netif }}"
     features:
       - "nesting=1"
-    description: " Last rebuilt by script at {{ now() | string }}"
     state: present
   register: was_built
   when: does_vm.proxmox_vms[0] is not defined
+
+# Set the description only on an actual build. Keeping the timestamped
+# description out of the build task above preserves idempotency — including
+# it there made every run differ (the timestamp always changes), forcing a
+# rebuild. This separate task runs only when the CT was just created.
+- name: Stamp the build description (only on a fresh build)
+  community.proxmox.proxmox:
+    node: pve
+    api_user: robot@pam
+    api_host: 192.168.1.100
+    api_token_id: "{{ api_catalog.pve_api.id }}"
+    api_token_secret: "{{ api_catalog.pve_api.key }}"
+    hostname: '{{ inventory_hostname }}'
+    description: "Last rebuilt by script at {{ now() | string }}"
+    state: present
+  when: was_built.changed
 
 - name: Remove Stale known_hosts Entries for Rebuilt Container
   command: ssh-keygen -R "{{ item }}"
