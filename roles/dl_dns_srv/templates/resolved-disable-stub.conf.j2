@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# dnsmasq owns :53 on this host; turn off the systemd-resolved stub
+# listener so the two don't collide.
+[Resolve]
+DNSStubListener=no
