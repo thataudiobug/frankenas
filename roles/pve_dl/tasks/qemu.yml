@@ -13,22 +13,26 @@
     qemu_net: >-
       {{
         qemu_net | default({}) | combine({
-          'net' ~ item.index: ('virtio,bridge=' ~ item.bridge)
+          'net' ~ item.index: ('virtio,bridge=' ~ item.props.bridge)
         })
       }}
   loop: "{{ resolved_networks }}"
   loop_control:
     label: "net{{ item.index }} ({{ item.key }})"
 
+# cloud-init ipconfig is a separate namespace from the netif hardware line,
+# so (unlike LXC) we can't just join props. We pull ip + gw from props:
+# DHCP NICs use ip=dhcp; static NICs pass their ip (already ip/subnet) and
+# gw if the NIC carries one.
 - name: Build the QEMU ipconfig (cloud-init) mapping from resolved networks
   ansible.builtin.set_fact:
     qemu_ipconfig: >-
       {{
         qemu_ipconfig | default({}) | combine({
           'ipconfig' ~ item.index: (
-            'ip=dhcp' if item.dhcp | bool
-            else 'ip=' ~ item.ip ~ '/' ~ item.subnet
-                 ~ (',gw=' ~ item.gateway if item.gateway | length > 0 else '')
+            'ip=dhcp' if item.props.ip == 'dhcp'
+            else 'ip=' ~ item.props.ip
+                 ~ (',gw=' ~ item.props.gw if item.props.gw is defined else '')
           )
         })
       }}
