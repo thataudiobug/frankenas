@@ -91,9 +91,24 @@
     owner: root
     group: root
     mode: "0644"
-    # Validate the FULL effective config (main + drop-ins) before load.
-    validate: "dnsmasq --test"
+    # `validate` only ever sees the single staged temp file (via %s), so it
+    # can't check directives that depend on the rest of the config — but it
+    # does catch syntax errors in this drop-in before it's written. The full
+    # effective-config check happens in the dedicated task below.
+    validate: "dnsmasq --test --conf-file=%s"
   notify: Restart dnsmasq
+
+# Validate the FULL assembled config (main + every drop-in) now that both
+# files are in place, BEFORE the service (re)starts. `validate` on the
+# template tasks above can't do this — it only sees one staged file at a
+# time — so a directive conflict across files would otherwise only surface
+# at service start. `--test` reads the real /etc/dnsmasq.conf (which pulls
+# in conf-dir) and exits non-zero on any error, failing the play here while
+# the previously running config stays loaded.
+- name: Validate the full effective dnsmasq configuration
+  ansible.builtin.command:
+    cmd: dnsmasq --test
+  changed_when: false
 
 - name: Enable and start dnsmasq
   ansible.builtin.systemd:
