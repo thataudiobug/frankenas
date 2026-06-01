@@ -1,13 +1,22 @@
 ---
-# Resolve the host's enabled networks into an ordered, fully-computed list
-# that the pct/qemu task files format into their platform-specific network
-# config. Produces ``resolved_networks``:
+# Resolve the host's enabled networks into an ordered list of fully-merged
+# property dicts that pct.yml/qemu.yml turn into a Proxmox netif string.
+# Produces ``resolved_networks``, where each entry's ``props`` is the
+# complete set of Proxmox NIC properties for that interface:
 #
 #   resolved_networks:
-#     - {index: 0, key: wan, bridge: vmbr1, ip: 192.168.1.103,
-#        subnet: "24", gateway: "192.168.1.254", is_mgmt: true}
-#     - {index: 1, key: oob, bridge: vmbr0, ip: 10.128.0.42,
-#        subnet: "9", gateway: "", is_mgmt: false, is_conn: true}
+#     - {index: 0, key: wan, is_conn: false,
+#        props: {name: eth0, ip: 192.168.1.103/24, bridge: vmbr1, gw: 192.168.1.254}}
+#     - {index: 1, key: oob, is_conn: true,
+#        props: {name: eth1, ip: dhcp, bridge: vmbr0}}
+#
+# The catalog entry is the source of truth for a NIC's properties. EVERY
+# key in the entry except a small set of control-only keys (see
+# ``_net_control_keys``) is passed straight through to the Proxmox netif
+# string, so a catalog can carry any property the module accepts —
+# ``bridge``, ``gw``, ``ip6``, ``gw6``, ``firewall``, ``tag``, ``mtu``, … —
+# without this code knowing about each one. ``name`` and ``ip`` are computed
+# (interface index, and static/DHCP address) and merged over the passthrough.
 #
 # Selection follows the catalog -> enabled framework. The host-var is
 # ``network_enabled`` (matching the ``network_catalog`` stem). It may be:
@@ -23,12 +32,26 @@
 #
 # A network is DHCP when (in precedence order): the host override sets
 # ``dhcp: true`` / ``ip: dhcp``, the host provides a static ip/host (=>
-# static), or the catalog entry defaults ``dhcp: true``. DHCP networks need
-# no IP and emit no static gateway — the DHCP server provides both.
+# static), or the catalog entry defaults ``dhcp: true`` / ``ip: dhcp``.
+# A DHCP NIC's address is just ``ip: dhcp`` in the netif string; the DHCP
+# server provides the address and gateway.
 #
 # frankinception writes the scalar form for "pick one" catalogs and the
 # mapping form for "pick many"; a hand-written list is also accepted. We
 # normalise all three into ``_nets`` (a mapping of key -> overrides) here.
+
+# Catalog/override keys that are control metadata for THIS task and are NOT
+# Proxmox netif properties — stripped before passthrough. Everything else
+# in a catalog entry flows into the netif string verbatim.
+#   network : octet prefix for 'host: <n>' overrides
+#   subnet  : optional CIDR suffix appended to a static ip (ip/subnet)
+#   oob     : marks the connection NIC (ansible_host)
+#   dhcp    : DHCP trigger flag
+#   host    : (override-only) octet to combine with the network prefix
+#   ip      : recomputed (static/dhcp) and re-added explicitly
+- name: Set the per-NIC control keys (not passed to Proxmox)
+  ansible.builtin.set_fact:
+    _net_control_keys: ["network", "subnet", "oob", "dhcp", "host", "ip"]
 
 - name: Normalise network_enabled (mapping form)
   ansible.builtin.set_fact:
@@ -75,7 +98,7 @@
 #
 # Two distinct roles that used to be the same NIC on a flat network:
 #
-#   * gateway NIC   — carries the default route (catalog defines 'gateway')
+#   * gateway NIC   — carries the default route (catalog defines 'gw')
 #   * connection NIC — the interface Ansible reaches the box on; its IP is
 #                       ansible_host. Marked with 'oob: true' in the catalog.
 #
@@ -88,7 +111,7 @@
   ansible.builtin.set_fact:
     _mgmt_keys: "{{ _mgmt_keys | default([]) + [item] }}"
   loop: "{{ _nets.keys() | list }}"
-  when: network_catalog[item].gateway is defined
+  when: network_catalog[item].gw is defined
   loop_control:
     label: "{{ item }}"
 
@@ -140,7 +163,12 @@
         + (_nets.keys() | list | difference(_mgmt_keys | default([])))
       }}
 
-# -- Resolve each network into its concrete config ---------------------
+# -- Resolve each network into its concrete property set --------------
+#
+# Each NIC's ``props`` = catalog entry (minus control keys) + host override
+# passthrough + computed ``name`` and ``ip``. The renderer just joins
+# props into ``key=value`` pairs, so any Proxmox NIC property present in
+# the catalog flows through unchanged.
 - name: Resolve each enabled network
   ansible.builtin.set_fact:
     resolved_networks: >-
@@ -148,14 +176,12 @@
         resolved_networks | default([]) + [{
           'index': idx,
           'key': key,
-          'bridge': network_catalog[key].bridge,
-          'subnet': network_catalog[key].subnet,
-          'gateway': network_catalog[key].gateway | default(''),
-          'is_mgmt': key in (_mgmt_keys | default([])),
-          'is_oob': key in (_oob_keys | default([])),
           'is_conn': key == _conn_key,
-          'dhcp': net_dhcp | bool,
-          'ip': net_ip | trim
+          'props': (
+            net_passthrough
+            | combine({'name': 'eth' ~ idx})
+            | combine({'ip': ('dhcp' if net_dhcp | bool else net_ip | trim)})
+          )
         }]
       }}
   loop: "{{ _net_order }}"
@@ -165,6 +191,17 @@
     label: "{{ key }}"
   vars:
     net_cfg: "{{ _nets[key] | default({}, true) }}"
+    # Passthrough = catalog entry + host override, minus control-only keys.
+    # This is every Proxmox netif property the catalog/override carry
+    # (bridge, gw, ip6, gw6, firewall, tag, mtu, …). 'name' and 'ip' are
+    # added afterwards so they always reflect the computed values.
+    net_passthrough: >-
+      {{
+        (network_catalog[key] | combine(net_cfg))
+        | dict2items
+        | rejectattr('key', 'in', _net_control_keys)
+        | items2dict
+      }}
     # DHCP when the host override asks for it (dhcp: true or ip: dhcp), OR
     # the catalog entry defaults to dhcp (dhcp: true or ip: dhcp) — UNLESS
     # the host gave a static ip/host, which always wins and forces static.
@@ -177,9 +214,9 @@
       {%- elif (network_catalog[key].ip is defined) and (network_catalog[key].ip | string | lower == 'dhcp') -%}true
       {%- else -%}false
       {%- endif -%}
-    # IP precedence (static networks only): explicit ip > catalog prefix +
-    # host octet > ansible_host (connection NIC only) > empty. DHCP networks
-    # resolve to an empty ip on purpose — the renderers emit ip=dhcp.
+    # Static IP precedence: explicit ip > catalog 'network' prefix + host
+    # octet > ansible_host (connection NIC only). When the catalog defines a
+    # 'subnet', it's appended as ip/subnet. DHCP NICs ignore this (ip=dhcp).
     net_ip: >-
       {%- if net_dhcp | bool -%}{%- endif -%}
       {%- if not (net_dhcp | bool) -%}
@@ -187,12 +224,13 @@
       {%- elif net_cfg.host is defined -%}{{ network_catalog[key].network }}{{ net_cfg.host }}
       {%- elif key == _conn_key -%}{{ ansible_host }}
       {%- else -%}{%- endif -%}
+      {%- if (not net_cfg.ip is defined or net_cfg.ip | string | lower != 'dhcp') and network_catalog[key].subnet is defined -%}/{{ network_catalog[key].subnet }}{%- endif -%}
       {%- endif -%}
 
 - name: Assert every static network resolved to an IP
   ansible.builtin.assert:
     that:
-      - item.dhcp | bool or (item.ip | length > 0)
+      - item.props.ip == 'dhcp' or (item.props.ip | length > 0)
     fail_msg: >-
       Network '{{ item.key }}' on {{ inventory_hostname }} is static but has
       no IP. Give it an 'ip' (full address) or 'host' (octet) under
