@@ -20,17 +20,12 @@
     mode: "0755"
 
 - name: Disable the systemd-resolved stub listener (frees :53)
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: resolved-disable-stub.conf.j2
     dest: /etc/systemd/resolved.conf.d/10-disable-stub.conf
     owner: root
     group: root
     mode: "0644"
-    content: |
-      # {{ ansible_managed }}
-      # dnsmasq owns :53 on this host; turn off the systemd-resolved stub
-      # listener so the two don't collide.
-      [Resolve]
-      DNSStubListener=no
   register: _resolved_stub
 
 - name: Restart systemd-resolved so :53 is released
@@ -44,15 +39,10 @@
 # (127.0.0.53). Replace it with a regular file pointing at dnsmasq on the
 # loopback so the box's own lookups resolve through the service it runs.
 - name: Repoint /etc/resolv.conf at dnsmasq (loopback)
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: resolv.conf.j2
     dest: /etc/resolv.conf
     owner: root
     group: root
     mode: "0644"
     follow: false
-    content: |
-      # {{ ansible_managed }}
-      # Local lookups go to dnsmasq on the loopback; the systemd-resolved
-      # stub listener is disabled (see 10-disable-stub.conf).
-      nameserver 127.0.0.1
-      search {{ _dns.domain }}
