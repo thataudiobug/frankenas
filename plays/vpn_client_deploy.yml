@@ -18,7 +18,7 @@
 
 - name: Deploy VPN client with kill switch
   hosts: vpn_clients
-  gather_facts: flase
+  gather_facts: true
   become: true
   roles:
     - role: dl_vpn_client
