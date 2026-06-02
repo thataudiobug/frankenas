@@ -16,6 +16,13 @@
   ansible.builtin.debug:
     var: pct_netif
 
+# Resolve the DNS profile (catalog -> enabled) once. Falls back to an empty
+# mapping when a host doesn't set dns_enabled, so nameserver/searchdomain
+# are simply omitted from the build rather than erroring.
+- name: Resolve the DNS resolver profile for this host
+  ansible.builtin.set_fact:
+    _dns_cfg: "{{ dns_catalog[dns_enabled] | default({}, true) if dns_enabled is defined else {} }}"
+
 #- name: Check if Proxmox Container Exists
 #  community.proxmox.proxmox_vm_info:
 #    node: pve
@@ -47,6 +54,12 @@
         | list
         | join('\n') }}"
     netif: "{{ pct_netif }}"
+    # Resolver set at build time (catalog -> enabled) so the guest has
+    # working DNS from first boot, before it runs apt. `dns_enabled` names a
+    # dns_catalog entry; the dnsmasq server picks 'public' (it can't resolve
+    # through itself before it's up), everything else picks 'oob'.
+    nameserver: "{{ _dns_cfg.nameserver | default(omit) }}"
+    searchdomain: "{{ _dns_cfg.searchdomain | default(omit) }}"
     features:
       - "nesting=1"
     state: present
