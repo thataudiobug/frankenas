@@ -1,9 +1,12 @@
-ansible_host: port-royal.oob.frankenas.lan   # was 192.168.1.103
+ansible_host: test-port-01.oob.frankenas.lan   # was 192.168.1.110
+os_enabled: "ubuntu"
 
 docker_groups_enabled:
-  public:
 
-gpu_enabled: true
+
+docker_containers_overrides:
+
+gpu_enabled: false
 compute_enabled: "small"
 accelerator_enabled: "false"
 storage_enabled: "m8"
@@ -11,7 +14,6 @@ dns_enabled: oob            # resolve through the OOB dnsmasq server
 network_enabled:
   wan:        # default route + internet
   oob:        # connection NIC, DHCP lease, auto-registered A record
-os_enabled: "ubuntu"
-users_enabled: [casey, robot]
 
-docker_containers_overrides:
+
+users_enabled: [casey, robot]
