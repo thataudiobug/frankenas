@@ -13,12 +13,12 @@
   gather_facts: false
   connection: local
   roles:
-    - pve_dl
-    when: "'dropplets' in group_names"
+    - role: pve_dl
+      when: "'dropplets' in group_names"
 
 - name: Deploy VPN client with kill switch
   hosts: vpn_clients
   gather_facts: flase
   become: true
   roles:
-    - dl_vpn_client
+    - role: dl_vpn_client
