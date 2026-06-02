@@ -1,13 +1,5 @@
-- name: Provision
-  hosts: docker
-  gather_facts: false
-  connection: local
-  roles:
-    - pve_dl
-
 - name: Configure
   hosts: docker
   gather_facts: true
   roles:
-    - dl_base
     - docker
