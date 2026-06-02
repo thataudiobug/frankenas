@@ -14,7 +14,7 @@
   connection: local
   roles:
     - role: pve_dl
-      when: "'dropplets' in group_names"
+      when: "'droplets' in group_names"
 
 - name: Deploy VPN client with kill switch
   hosts: vpn_clients
