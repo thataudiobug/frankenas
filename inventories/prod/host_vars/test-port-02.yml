@@ -1,4 +1,4 @@
-ansible_host: testport02
+ansible_host: test-port-02
 users_enabled:
   casey:
   robot:
