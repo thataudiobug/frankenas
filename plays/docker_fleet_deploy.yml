@@ -1,4 +1,14 @@
-- name: Configure
+
+#Fully provisions hosts who are docker hosts.
+- name: Provision docker hosts
+  hosts: docker
+  gather_facts: false
+  connection: local
+  roles:
+    - pve_dl
+  when: 'dropplets' in group_names
+
+- name: Configure docker hosts
   hosts: docker
   gather_facts: true
   roles:
