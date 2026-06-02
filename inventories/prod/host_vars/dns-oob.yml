@@ -27,4 +27,4 @@ dns_srv_overrides: {}
 network_enabled:
   wan:
   oob:
-    ip: "10.128.0.2"
+    ip: "10.128.0.2/9"
