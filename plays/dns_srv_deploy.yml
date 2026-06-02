@@ -46,4 +46,5 @@
   gather_facts: true
   become: true
   roles:
+    - dl_base
     - dl_dns_srv
