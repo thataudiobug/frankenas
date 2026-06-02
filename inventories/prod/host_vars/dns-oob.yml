@@ -17,13 +17,13 @@ dns_enabled: public
 # group_vars/dns_srv/dns_srv_catalog.yml.
 dns_srv_enabled: oob
 
-# Per-host field tweaks merged over the selected profile. Empty here — the
+# Per-host field tweaks merged over the selected profile. Empty here  ^`^t the
 # 'oob' profile already matches this CT. Example: { oob_iface: eth0 } on a
 # host whose OOB NIC index differs.
 dns_srv_overrides: {}
 
 # WAN for upstream DNS forwarding + apt; OOB pinned static (overrides the
-# catalog default ip:dhcp → forces static at .2).
+# catalog default ip:dhcp  ^f^r forces static at .2).
 network_enabled:
   wan:
   oob:
