@@ -1,12 +1,30 @@
+# The DNS/DHCP server cannot lease from itself or resolve its own FQDN
+# before it's up, so it stays a hand-pinned static anchor.
 ansible_host: 10.128.0.2
-users_enabled:
-  robot:
-  casey:
+
+os_enabled: "ubuntu"
+compute_enabled: "small"
+storage_enabled: "m8"
+users_enabled: [casey, robot]
+
+# Bootstrap resolver: this CT IS the OOB DNS server, so it can't resolve
+# through itself before dnsmasq is up. Build it pointing at public resolvers
+# so apt works on first boot. (catalog -> enabled; see dns_catalog.)
+dns_enabled: public
+
+# Which dnsmasq server profile this host runs (catalog -> enabled). The
+# profile (zone, OOB CIDR, DHCP pool, anchors, upstreams) lives in
+# group_vars/dns_srv/dns_srv_catalog.yml.
 dns_srv_enabled: oob
-compute_enabled: small
+
+# Per-host field tweaks merged over the selected profile. Empty here — the
+# 'oob' profile already matches this CT. Example: { oob_iface: eth0 } on a
+# host whose OOB NIC index differs.
+dns_srv_overrides: {}
+
+# WAN for upstream DNS forwarding + apt; OOB pinned static (overrides the
+# catalog default ip:dhcp → forces static at .2).
 network_enabled:
   wan:
   oob:
-    ip: 10.128.0.2/9
-os_enabled: ubuntu
-storage_enabled: s8
+    ip: "10.128.0.2"
