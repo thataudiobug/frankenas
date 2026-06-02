@@ -1,0 +1,50 @@
+# plays/set_dns.yml — point an Ubuntu host's resolver at chosen DNS servers
+---
+- name: Configure DNS resolvers
+  hosts: "{{ target | default('all') }}"
+  become: true
+  vars:
+    # Override per-run with -e, or pull from host/group vars.
+    dns_servers:
+      - 10.128.0.2
+    dns_search_domains:
+      - oob.frankenas.lan
+    dns_fallback: []          # empty = no fallback (don't leak to defaults)
+
+  tasks:
+    - name: Ensure systemd-resolved is installed and running
+      ansible.builtin.apt:
+        name: systemd-resolved
+        state: present
+        update_cache: true
+      # On 24.04 it's a separate package; on older releases it ships with systemd.
+      failed_when: false
+
+    - name: Write resolved drop-in
+      ansible.builtin.copy:
+        dest: /etc/systemd/resolved.conf.d/10-frankenas.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Ansible managed
+          [Resolve]
+          DNS={{ dns_servers | join(' ') }}
+          Domains={{ dns_search_domains | join(' ') }}
+          FallbackDNS={{ dns_fallback | join(' ') }}
+      notify: Restart systemd-resolved
+
+    - name: Ensure /etc/resolv.conf points at the systemd-resolved stub
+      ansible.builtin.file:
+        src: /run/systemd/resolve/stub-resolv.conf
+        dest: /etc/resolv.conf
+        state: link
+        force: true
+      notify: Restart systemd-resolved
+
+  handlers:
+    - name: Restart systemd-resolved
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: restarted
+        enabled: true
