@@ -14,6 +14,11 @@ compute_enabled: "small"
 storage_enabled: "m8"
 users_enabled: [casey, robot]
 
+# Bootstrap resolver: c2 is on the recovery path and may be built before the
+# OOB DNS server exists, so it resolves through public resolvers at build
+# rather than depending on dnsmasq. (catalog -> enabled; see dns_catalog.)
+dns_enabled: public
+
 # WAN for upstream DNS forwarding + apt; OOB pinned static at the .3 anchor
 # (overrides the catalog default ip:dhcp -> forces static).
 network_enabled:
