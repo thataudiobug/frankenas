@@ -36,6 +36,21 @@ os_catalog:  # pick one
   ubuntu:
     ct_template: "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
 
+dns_catalog:  # pick one
+  # Resolver config applied to the container at BUILD time (Proxmox sets the
+  # LXC 'nameserver'/'searchdomain'), so the guest has working DNS from first
+  # boot — before it ever runs apt. Pick one with `dns_enabled: <key>`.
+  oob:
+    # Normal hosts resolve through the OOB dnsmasq server.
+    nameserver: "10.128.0.2 1.1.1.1 8.8.8.8"
+    searchdomain: "oob.frankenas.lan"
+  public:
+    # Bootstrap profile: public resolvers. Used by the dnsmasq server itself
+    # (it can't resolve through itself before dnsmasq is up) and by anything
+    # that must resolve before the OOB DNS exists.
+    nameserver: "1.1.1.1 8.8.8.8"
+    searchdomain: "frankenas.com"
+
 network_catalog:  # pick many
   wan:
     bridge: "vmbr1"
