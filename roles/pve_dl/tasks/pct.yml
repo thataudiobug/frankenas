@@ -85,7 +85,7 @@
     api_host: 192.168.1.100
     api_token_id: "{{ api_catalog.pve_api.id }}"
     api_token_secret: "{{ api_catalog.pve_api.key }}"
-    hostname: '{{ inventory_hostname }}'
+    vmid: "{{ was_built[0].vmid }}"
     description: "Last rebuilt by script at {{ now() | string }}"
     state: present
   when: was_built.changed
@@ -102,7 +102,7 @@
     api_host: 192.168.1.100
     api_token_id: "{{ api_catalog.pve_api.id }}"
     api_token_secret: "{{ api_catalog.pve_api.key }}"
-    hostname: '{{ inventory_hostname }}'
+    vmid: "{{ was-built[0].vmid }}"
     features:
       - "nesting=1"
       - "lxc.cgroup2.devices.allow: c 226:128 rwm"
