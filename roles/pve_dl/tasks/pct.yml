@@ -85,6 +85,7 @@
     api_host: 192.168.1.100
     api_token_id: "{{ api_catalog.pve_api.id }}"
     api_token_secret: "{{ api_catalog.pve_api.key }}"
+    hostname: '{{ inventory_hostname }}'
     vmid: "{{ was_built.vmid }}"
     description: "Last rebuilt by script at {{ now() | string }}"
     state: present
@@ -102,6 +103,7 @@
     api_host: 192.168.1.100
     api_token_id: "{{ api_catalog.pve_api.id }}"
     api_token_secret: "{{ api_catalog.pve_api.key }}"
+    hostname: '{{ inventory_hostname }}'
     vmid: "{{ was-built.vmid }}"
     features:
       - "nesting=1"
