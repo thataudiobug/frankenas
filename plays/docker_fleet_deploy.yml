@@ -6,7 +6,7 @@
   connection: local
   roles:
     - pve_dl
-  when: 'dropplets' in group_names
+  when: "'dropplets' in group_names"
 
 - name: Configure docker hosts
   hosts: docker
