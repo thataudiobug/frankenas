@@ -19,6 +19,10 @@
 # Pick the server entry from the catalog using the enabled key, exactly
 # like compute_enabled -> compute_catalog elsewhere in the project.
 
+- name: DEBUG Show ovpn Vars
+  debug:
+    var: vault_ca_toronto_ovpn
+
 - name: Assert a server is selected and present in the catalog
   ansible.builtin.assert:
     that:

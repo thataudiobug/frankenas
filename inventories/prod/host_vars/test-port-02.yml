@@ -8,5 +8,5 @@ network_enabled:
   wan:
 os_enabled: ubuntu
 storage_enabled: s8
-ovpn_server_enabled: ca_toronto
 dns_enabled: oob
+ovpn_server_enabled: ca_toronto
