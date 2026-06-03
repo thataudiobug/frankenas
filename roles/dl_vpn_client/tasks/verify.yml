@@ -6,7 +6,9 @@
 #
 # What "leak-free" means here:
 #   * the tunnel interface exists and is up,
-#   * the default route points at the tunnel,
+#   * public traffic actually egresses via the tunnel (resolved with a
+#     route lookup to a public IP, since redirect-gateway installs
+#     0.0.0.0/1 + 128.0.0.0/1 rather than replacing the default route),
 #   * public egress works AND exits via the VPN (public IP != the host's
 #     own WAN IP, when we can determine the latter),
 #   * with the tunnel notionally down, the kill switch would block egress
@@ -16,25 +18,47 @@
 # Set vpn_verify_strict=false to log problems as warnings instead of
 # failing the play.
 
-- name: Check the tunnel interface exists and is up
+# Wait for the tunnel to come up rather than snapshot it once. The verify
+# tasks run right after OpenVPN is (re)started, and the TLS handshake takes
+# a second or two, so a single check races the handshake and falsely reports
+# the tunnel down. Retry until the device appears (or we exhaust retries,
+# in which case the last result drives a genuine failure below).
+- name: Wait for the tunnel interface to come up
   ansible.builtin.command:
     cmd: "ip -o link show {{ vpn_tun_dev }}"
   register: vpn_iface
   changed_when: false
   failed_when: false
-
-- name: Record tunnel-up state
-  ansible.builtin.set_fact:
-    vpn_tunnel_up: "{{ vpn_iface.rc == 0 and 'state UP' in vpn_iface.stdout or (vpn_iface.rc == 0 and 'UNKNOWN' in vpn_iface.stdout) }}"
+  retries: "{{ vpn_verify_retries }}"
+  delay: "{{ vpn_verify_delay }}"
+  until: >-
+    vpn_iface.rc == 0 and
+    ('state UP' in vpn_iface.stdout or 'UNKNOWN' in vpn_iface.stdout)
 
 # tun devices commonly report state UNKNOWN rather than UP even when
-# carrying traffic, so we treat both as up (handled above).
+# carrying traffic, so we treat both as "up".
+- name: Record tunnel-up state
+  ansible.builtin.set_fact:
+    vpn_tunnel_up: >-
+      {{ vpn_iface.rc == 0 and
+         ('state UP' in vpn_iface.stdout or 'UNKNOWN' in vpn_iface.stdout) }}
 
-- name: Confirm the default route uses the tunnel
+# Determine the ACTUAL egress path for public traffic, not the literal
+# 'default' route. With redirect-gateway def1, OpenVPN installs 0.0.0.0/1
+# and 128.0.0.0/1 via the tunnel and leaves the real default route alone,
+# so checking 'ip route show default' would always miss the tunnel. A
+# route lookup to a public IP resolves the route that actually wins by
+# longest-prefix match. The probe IP must not be the VPN endpoint (which
+# is intentionally routed outside the tunnel).
+- name: Determine the egress interface for public traffic
   ansible.builtin.command:
-    cmd: "ip route show default"
-  register: vpn_default_route
+    cmd: "ip route get {{ vpn_route_probe_ip }}"
+  register: vpn_route_get
   changed_when: false
+  failed_when: false
+  retries: "{{ vpn_verify_retries }}"
+  delay: "{{ vpn_verify_delay }}"
+  until: vpn_tun_dev in vpn_route_get.stdout
 
 - name: Check the kill-switch table is loaded
   ansible.builtin.command:
@@ -62,7 +86,7 @@
   ansible.builtin.set_fact:
     vpn_checks:
       tunnel_up: "{{ vpn_tunnel_up | bool }}"
-      default_via_tunnel: "{{ vpn_tun_dev in vpn_default_route.stdout }}"
+      default_via_tunnel: "{{ vpn_tun_dev in vpn_route_get.stdout }}"
       killswitch_loaded: "{{ vpn_nft_table.rc == 0 }}"
       output_policy_drop: "{{ vpn_output_drop | bool }}"
       public_egress_ok: "{{ vpn_public_ip.status is defined and vpn_public_ip.status == 200 }}"
