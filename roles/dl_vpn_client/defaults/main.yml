@@ -81,3 +81,18 @@ vpn_disable_ipv6: true
 # is detected (tunnel down, or egress not via the tunnel). Leave true for
 # safety; set false only for debugging.
 vpn_verify_strict: true
+
+# The tunnel device and its routes don't exist the instant OpenVPN is
+# (re)started — the TLS handshake takes a moment. The interface and
+# route-path checks retry up to this many times, sleeping this many
+# seconds between attempts, before concluding the tunnel is genuinely
+# down. retries*delay is the worst-case wait for a slow handshake.
+vpn_verify_retries: 12
+vpn_verify_delay: 5
+
+# Public IP used to probe the actual egress path via ``ip route get``.
+# OpenVPN's redirect-gateway installs 0.0.0.0/1 + 128.0.0.0/1 via the
+# tunnel rather than touching the literal default route, so we resolve a
+# real public destination to see which interface wins. Must NOT be the
+# VPN endpoint itself (that's deliberately routed outside the tunnel).
+vpn_route_probe_ip: "1.1.1.1"
