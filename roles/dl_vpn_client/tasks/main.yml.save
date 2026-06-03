@@ -68,45 +68,15 @@
     fail_msg: "vpn_mgmt_cidr ({{ vpn_mgmt_cidr }}) is not a valid CIDR."
     quiet: true
 
-# -- 2.5, Deal with PCT scenerio ----------------------------------------
-
-- name: Add tun mappings for pct container
-  blockinfile:
-    path: "/etc/pve/lxc/{{ was_built.vmid }}.conf"
+- name: Add tun mappings for pct containers
+  blockinfile: 
+    path: "/etc/pve/lxc/{{ was_built. }} "
     block: |
-      #add tun device
+      # Add tun device 
       lxc.cgroup2.devices.allow: c 10:200 rwm
       lxc.mount.entry: /dev/net dev/net none bind,create=dir
+  when: "'pct' in group_names"
   delegate_to: pve
-  when: "'pct' in group_names"
-
-
-- name: Chown the tun device
-  file:
-    path: /dev/net/tun
-    owner: 10000
-    group: 10000
-  delegate_to: pve
-  when: "'pct' in group_names"
-
-- name: Reboot container
-  community.proxmox.proxmox:
-    node: pve
-    api_user: robot@pam
-    api_host: 192.168.1.100
-    api_token_id: "{{ api_catalog.pve_api.id }}"
-    api_token_secret: "{{ api_catalog.pve_api.key }}"
-    hostname: '{{ inventory_hostname }}'
-    state: restarted
-  delegate_to: localhost
-  when: "'pct' in group_names"
-
-- name: Wait for Container to Become Available
-  wait_for:
-    host: "{{ ansible_host }}"
-    port: 22
-    timeout: 30
-  delegate_to: localhost
 
 # -- 3. Packages --------------------------------------------------------
 
