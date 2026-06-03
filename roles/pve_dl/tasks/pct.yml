@@ -71,9 +71,6 @@
   loop:
     - "{{ inventory_hostname }}"
     - "{{ ansible_host }}"
-  when:
-    - was_built.changed
-    - inventory_hostname != ansible_host
   delegate_to: localhost
   changed_when: false
   failed_when: false
