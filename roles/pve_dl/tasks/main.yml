@@ -4,6 +4,10 @@
   include_tasks: build_networks.yml
   when: "'pct' in group_names or 'qemu' in group_names"
 
+- name: Resolve enabled bind mounts (pct only)
+  include_tasks: build_mounts.yml
+  when: "'pct' in group_names"
+
 - name: Provision Proxmox Containers
   include_tasks: pct.yml
   when: "'pct' in group_names"
