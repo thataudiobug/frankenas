@@ -1,4 +1,4 @@
-droplet_bind_catalog:  # reference
+droplet_bind_catalog:  # pick many
   media:
     src: "/essek/media"
     mnt: "/mnt/media"
