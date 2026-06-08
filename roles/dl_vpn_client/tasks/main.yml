@@ -110,6 +110,19 @@
 
 # -- 3. Packages --------------------------------------------------------
 
+# With IPv6 disabled (and the kill switch dropping v6 egress) the resolver
+# still returns AAAA records, so apt would try an unreachable IPv6 address
+# first and hang/fail rather than falling back to IPv4. Force apt onto IPv4
+# BEFORE the first apt run so the package install itself succeeds.
+- name: Force apt to use IPv4 (avoids unreachable AAAA addresses)
+  ansible.builtin.template:
+    src: apt-force-ipv4.conf.j2
+    dest: /etc/apt/apt.conf.d/99force-ipv4
+    owner: root
+    group: root
+    mode: "0644"
+  when: vpn_disable_ipv6 | bool
+
 - name: Install OpenVPN and nftables
   ansible.builtin.apt:
     name:
