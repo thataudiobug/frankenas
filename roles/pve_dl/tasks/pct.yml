@@ -54,6 +54,11 @@
         | list
         | join('\n') }}"
     netif: "{{ pct_netif }}"
+    # Bind mounts resolved from droplet_bind_catalog -> droplet_bind_enabled
+    # (build_mounts.yml). Each entry binds a PVE host dir (host_path/src)
+    # into the guest (mountpoint/mnt). Omitted entirely when no binds are
+    # enabled so the module doesn't try to manage mount points.
+    mount_volumes: "{{ resolved_mounts if (resolved_mounts | default([]) | length > 0) else omit }}"
     # Resolver set at build time (catalog -> enabled) so the guest has
     # working DNS from first boot, before it runs apt. `dns_enabled` names a
     # dns_catalog entry; the dnsmasq server picks 'public' (it can't resolve
