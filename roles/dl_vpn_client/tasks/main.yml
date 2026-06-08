@@ -70,15 +70,23 @@
 
 # -- 2.5, Deal with PCT scenerio ----------------------------------------
 
+# NOTE: /etc/pve/lxc/<vmid>.conf lives on Proxmox's pmxcfs, which rewrites
+# the file through its own parser and strips comment lines it doesn't
+# recognise. blockinfile relies on BEGIN/END marker *comments* to find an
+# existing block, so those markers get eaten and every run re-appends the
+# block. lineinfile matches the literal config key instead, so it stays
+# idempotent with no markers to lose.
 - name: Add tun mappings for pct container
-  blockinfile:
+  ansible.builtin.lineinfile:
     path: "/etc/pve/lxc/{{ was_built.vmid }}.conf"
-    block: |
-      #add tun device
-      lxc.cgroup2.devices.allow: c 10:200 rwm
-      lxc.mount.entry: /dev/net dev/net none bind,create=dir
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "lxc.cgroup2.devices.allow: c 10:200 rwm"
+    - "lxc.mount.entry: /dev/net dev/net none bind,create=dir"
   delegate_to: pve
   when: "'pct' in group_names"
+  register: was_tun_added
 
 
 - name: Chown the tun device
@@ -99,7 +107,7 @@
     hostname: '{{ inventory_hostname }}'
     state: restarted
   delegate_to: localhost
-  when: "'pct' in group_names"
+  when: was_tun_added is changed
 
 - name: Wait for Container to Become Available
   wait_for:
