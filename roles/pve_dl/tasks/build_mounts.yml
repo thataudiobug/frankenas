@@ -1,0 +1,128 @@
+---
+# Resolve the host's enabled bind mounts into an ordered list of mount
+# definitions that pct.yml feeds to the Proxmox module's ``mount_volumes``.
+# Produces ``resolved_mounts``, each entry being a bind mount of a PVE host
+# directory (``src``) into the guest (``mnt``):
+#
+#   resolved_mounts:
+#     - {id: mp0, host_path: /essek/media,          mountpoint: /mnt/media}
+#     - {id: mp1, host_path: /Caleb/docker/configs, mountpoint: /mnt/config}
+#
+# The catalog entry is the source of truth. ``src`` -> ``host_path`` (the
+# directory on the Proxmox HOST) and ``mnt`` -> ``mountpoint`` (the path
+# INSIDE the guest). Any other key on the entry except those two control
+# keys is passed through as a Proxmox mount ``option`` (e.g. ``ro: "1"``,
+# ``backup: "0"``), so the catalog can carry any mount option the module
+# accepts without this code knowing about each one.
+#
+# Selection follows the catalog -> enabled framework. The host-var is
+# ``droplet_bind_enabled`` (matching the ``droplet_bind_catalog`` stem),
+# a "pick many" catalog. It may be:
+#
+#   droplet_bind_enabled: media                # scalar — single bind
+#   droplet_bind_enabled: [media, config]      # list — multiple, no overrides
+#   droplet_bind_enabled:                      # mapping — multiple w/ overrides
+#     media:
+#     config:
+#       mnt: /srv/config                       # override the guest path
+#       ro: "1"                                # extra mount option
+#
+# When no binds are enabled this is a no-op: ``resolved_mounts`` stays empty
+# and pct.yml omits ``mount_volumes`` entirely.
+
+# Catalog/override keys that map to dedicated module fields rather than
+# generic mount options — stripped before option passthrough.
+#   src : the PVE host directory  -> host_path
+#   mnt : the guest mount point   -> mountpoint
+- name: Set the per-mount control keys (mapped to dedicated fields)
+  ansible.builtin.set_fact:
+    _mount_control_keys: ["src", "mnt"]
+
+- name: Default resolved_mounts to empty
+  ansible.builtin.set_fact:
+    resolved_mounts: []
+
+- name: Normalise droplet_bind_enabled (mapping form)
+  ansible.builtin.set_fact:
+    _binds: "{{ droplet_bind_enabled }}"
+  when:
+    - droplet_bind_enabled is defined
+    - droplet_bind_enabled is mapping
+
+- name: Normalise droplet_bind_enabled (scalar form)
+  ansible.builtin.set_fact:
+    _binds: "{{ {droplet_bind_enabled: {}} }}"
+  when:
+    - droplet_bind_enabled is defined
+    - droplet_bind_enabled is string
+
+- name: Normalise droplet_bind_enabled (list form)
+  ansible.builtin.set_fact:
+    _binds: "{{ dict(droplet_bind_enabled | zip([{}] * (droplet_bind_enabled | length))) }}"
+  when:
+    - droplet_bind_enabled is defined
+    - droplet_bind_enabled is not mapping
+    - droplet_bind_enabled is not string
+    - droplet_bind_enabled is iterable
+
+- name: Validate every enabled bind exists in the catalog
+  ansible.builtin.assert:
+    that:
+      - item in droplet_bind_catalog
+    fail_msg: >-
+      Enabled bind '{{ item }}' is not present in droplet_bind_catalog.
+      Available: {{ droplet_bind_catalog.keys() | list }}
+    quiet: true
+  loop: "{{ (_binds | default({})).keys() | list }}"
+
+# -- Resolve each enabled bind into a mount definition -----------------
+#
+# host_path/mountpoint come from src/mnt (catalog, overridable per host).
+# Everything else on the merged entry becomes a Proxmox mount option. mp
+# slots are assigned in selection order (mp0, mp1, …).
+- name: Resolve each enabled bind mount
+  ansible.builtin.set_fact:
+    resolved_mounts: >-
+      {{
+        resolved_mounts + [
+          {
+            'id': 'mp' ~ idx,
+            'host_path': bind_merged.src,
+            'mountpoint': bind_merged.mnt,
+          }
+          | combine(
+              {'options': bind_options} if bind_options | length > 0 else {}
+            )
+        ]
+      }}
+  loop: "{{ (_binds | default({})).keys() | list }}"
+  loop_control:
+    index_var: idx
+    loop_var: key
+    label: "mp{{ idx }} ({{ key }})"
+  vars:
+    bind_merged: "{{ droplet_bind_catalog[key] | combine(_binds[key] | default({}, true)) }}"
+    bind_options: >-
+      {{
+        bind_merged
+        | dict2items
+        | rejectattr('key', 'in', _mount_control_keys)
+        | items2dict
+      }}
+
+- name: Assert every resolved bind has a host path and mountpoint
+  ansible.builtin.assert:
+    that:
+      - item.host_path | default('') | length > 0
+      - item.mountpoint | default('') | length > 0
+    fail_msg: >-
+      Bind mount '{{ item.id }}' is missing src (host_path) or mnt
+      (mountpoint). Every droplet_bind_catalog entry must define both.
+    quiet: true
+  loop: "{{ resolved_mounts }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Show resolved bind mounts
+  ansible.builtin.debug:
+    var: resolved_mounts
