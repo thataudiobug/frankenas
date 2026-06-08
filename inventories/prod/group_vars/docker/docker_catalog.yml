@@ -6,15 +6,15 @@ docker_containers_catalog:  # pick many
       - "81:81"
       - "443:443"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/npm/data:/data'
-      - '{{ docker_bind_catalog.config.mnt }}/npm/letsencrypt:/etc/letsencrypt'
+      - '{{ dropplet_bind_catalog.config.mnt }}/npm/data:/data'
+      - '{{ dropplet_bind_catalog.config.mnt }}/npm/letsencrypt:/etc/letsencrypt'
 
   termix:
     image: "ghcr.io/lukegus/termix:latest"
     ports:
       - "8443:8443"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/termix:/app/data'
+      - '{{ dropplet_bind_catalog.config.mnt }}/termix:/app/data'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -28,7 +28,7 @@ docker_containers_catalog:  # pick many
     ports:
       - "8097:8097"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/nextcloud:/config'
+      - '{{ dropplet_bind_catalog.config.mnt }}/nextcloud:/config'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -39,9 +39,9 @@ docker_containers_catalog:  # pick many
     ports:
       - "8096:8096"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/jellyfin/config:/config'
-      - '{{ docker_bind_catalog.nott.mnt }}:/cache'
-      - '{{ docker_bind_catalog.media.mnt }}:/media'
+      - '{{ dropplet_bind_catalog.config.mnt }}/jellyfin/config:/config'
+      - '{{ dropplet_bind_catalog.nott.mnt }}:/cache'
+      - '{{ dropplet_bind_catalog.media.mnt }}:/media'
     devices:
       - "/dev/dri:/dev/dri"
 
@@ -50,7 +50,7 @@ docker_containers_catalog:  # pick many
     ports:
       - "3579:3579"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/ombi:/config'
+      - '{{ dropplet_bind_catalog.config.mnt }}/ombi:/config'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -61,7 +61,7 @@ docker_containers_catalog:  # pick many
     ports:
       - "9696:9696"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/prowlarr:/config'
+      - '{{ dropplet_bind_catalog.config.mnt }}/prowlarr:/config'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -72,9 +72,9 @@ docker_containers_catalog:  # pick many
     ports:
       - "8989:8989"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt }}/sonarr:/config'
-      - '{{ docker_bind_catalog.media.mnt }}/tv:/tv'
-      - '{{ docker_bind_catalog.media.mnt }}/downloads:/downloads'
+      - '{{ dropplet_bind_catalog.config.mnt }}/sonarr:/config'
+      - '{{ dropplet_bind_catalog.media.mnt }}/tv:/tv'
+      - '{{ dropplet_bind_catalog.media.mnt }}/downloads:/downloads'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -85,9 +85,9 @@ docker_containers_catalog:  # pick many
     ports:
       - "7878:7878"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt  }}/radarr:/config'
-      - '{{ docker_bind_catalog.media.mnt }}/movies:/movies'
-      - '{{ docker_bind_catalog.media.mnt }}/downloads:/downloads'
+      - '{{ dropplet_bind_catalog.config.mnt  }}/radarr:/config'
+      - '{{ dropplet_bind_catalog.media.mnt }}/movies:/movies'
+      - '{{ dropplet_bind_catalog.media.mnt }}/downloads:/downloads'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -98,9 +98,9 @@ docker_containers_catalog:  # pick many
     ports:
       - "8686:8686"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt  }}/lidarr:/config'
-      - '{{ docker_bind_catalog.media.mnt }}/music:/music'
-      - '{{ docker_bind_catalog.media.mnt }}/downloads:/downloads'
+      - '{{ dropplet_bind_catalog.config.mnt  }}/lidarr:/config'
+      - '{{ dropplet_bind_catalog.media.mnt }}/music:/music'
+      - '{{ dropplet_bind_catalog.media.mnt }}/downloads:/downloads'
     env:
       PUID: "1000"
       PGID: "1000"
@@ -113,8 +113,8 @@ docker_containers_catalog:  # pick many
       - "6881:6881/udp"
       - "8080:8080"
     volumes:
-      - '{{ docker_bind_catalog.config.mnt  }}/qbittorrent:/config'
-      - '{{ docker_bind_catalog.media.mnt  }}/downloads:/downloads'
+      - '{{ dropplet_bind_catalog.config.mnt  }}/qbittorrent:/config'
+      - '{{ dropplet_bind_catalog.media.mnt  }}/downloads:/downloads'
     env:
       PUID: "1000"
       PGID: "1000"
