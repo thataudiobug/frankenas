@@ -88,9 +88,13 @@
     state: present
   when: was_built.changed
 
-- name: Wait for buildout to complete
-  pause:
-    seconds: 10
+- name: Wait for the container config to register on pve
+  ansible.builtin.wait_for:
+    path: "/etc/pve/lxc/{{ was_built.vmid }}.conf"
+    state: present
+    timeout: 60
+    sleep: 2
+  delegate_to: pve
   when: was_built is changed
 
 # Bind mounts (resolved_mounts from build_mounts.yml) can't go through the
