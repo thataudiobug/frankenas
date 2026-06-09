@@ -54,11 +54,6 @@
         | list
         | join('\n') }}"
     netif: "{{ pct_netif }}"
-    # Bind mounts resolved from droplet_bind_catalog -> droplet_bind_enabled
-    # (build_mounts.yml). Each entry binds a PVE host dir (host_path/src)
-    # into the guest (mountpoint/mnt). Omitted entirely when no binds are
-    # enabled so the module doesn't try to manage mount points.
-    mount_volumes: "{{ resolved_mounts if (resolved_mounts | default([]) | length > 0) else omit }}"
     # Resolver set at build time (catalog -> enabled) so the guest has
     # working DNS from first boot, before it runs apt. `dns_enabled` names a
     # dns_catalog entry; the dnsmasq server picks 'public' (it can't resolve
@@ -97,6 +92,44 @@
   pause:
     seconds: 10
   when: was_built is changed
+
+# Bind mounts (resolved_mounts from build_mounts.yml) can't go through the
+# Proxmox API build call — the API rejects binding arbitrary host paths.
+# They're applied with `pct set` ON the pve node instead. Each entry becomes
+#   pct set <vmid> --mpN <host_path>,mp=<mountpoint>[,<opt>=<val>...]
+# Set before the container starts so the mounts are present on first boot.
+# Idempotent: we read the current config and skip mounts already configured
+# with the same value, so re-runs don't report spurious changes.
+- name: Read current container config (for mount idempotency)
+  ansible.builtin.command:
+    cmd: "pct config {{ was_built.vmid }}"
+  register: pct_current_config
+  changed_when: false
+  delegate_to: pve
+  when: resolved_mounts | default([]) | length > 0
+
+- name: Configure bind mounts on the PVE host
+  ansible.builtin.command:
+    cmd: >-
+      pct set {{ was_built.vmid }}
+      --{{ item.id }} {{ mount_value }}
+  loop: "{{ resolved_mounts | default([]) }}"
+  loop_control:
+    label: "{{ item.id }} -> {{ item.mountpoint }}"
+  delegate_to: pve
+  vars:
+    # pct mp value: <host_path>,mp=<guest_path>[,opt=val...]. Bind mounts use
+    # the host directory directly as the "volume". Extra options (ro, backup,
+    # …) come from the catalog entry via build_mounts.yml.
+    mount_value: >-
+      {{ item.host_path }},mp={{ item.mountpoint }}{% for k, v in (item.options | default({})).items() %},{{ k }}={{ v }}{% endfor %}
+  register: pct_set_mounts
+  # Only set when the desired "mpN: <value>" line isn't already present in
+  # the live config. pct config renders the volume and options on one line.
+  changed_when: pct_set_mounts.rc == 0
+  when:
+    - resolved_mounts | default([]) | length > 0
+    - "(item.id ~ ': ' ~ mount_value) not in (pct_current_config.stdout | default(''))"
 
 - name: Add GPU Mappings
   community.proxmox.proxmox:
