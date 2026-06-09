@@ -106,7 +106,7 @@
 # with the same value, so re-runs don't report spurious changes.
 - name: Read current container config (for mount idempotency)
   ansible.builtin.command:
-    cmd: "pct config {{ was_built.vmid }}"
+    cmd: "/usr/sbin/pct config {{ was_built.vmid }}"
   register: pct_current_config
   changed_when: false
   delegate_to: pve
@@ -115,7 +115,7 @@
 - name: Configure bind mounts on the PVE host
   ansible.builtin.command:
     cmd: >-
-      pct set {{ was_built.vmid }}
+      /usr/sbin/pct set {{ was_built.vmid }}
       --{{ item.id }} {{ mount_value }}
   loop: "{{ resolved_mounts | default([]) }}"
   loop_control:
