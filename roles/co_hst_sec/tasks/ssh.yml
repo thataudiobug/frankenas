@@ -18,6 +18,21 @@
     group: root
     mode: "0755"
 
+# `sshd -t` (run by the template's validate below) requires the privilege-
+# separation directory to exist or it errors out before even reading the
+# config ("Missing privilege separation directory: /run/sshd"). On a freshly
+# built container sshd may not have started yet, so /run/sshd doesn't exist.
+# /run is a tmpfs (gone on reboot), but sshd's systemd unit/init recreates it
+# on start, so creating it here only bridges the gap for this run — it does
+# not need to persist.
+- name: Ensure the sshd privilege-separation directory exists
+  ansible.builtin.file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Install hardened sshd drop-in (validated)
   ansible.builtin.template:
     src: sshd_hardening.conf.j2
