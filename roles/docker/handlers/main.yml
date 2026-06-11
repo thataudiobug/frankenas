@@ -1,2 +1,10 @@
 ---
 # handlers file for docker
+
+# Restart Alloy after contributing the docker-source snippet / adding the
+# service user to the docker group, so container-log shipping comes online.
+- name: Restart alloy for docker logs
+  ansible.builtin.systemd:
+    name: alloy
+    state: restarted
+    daemon_reload: true
