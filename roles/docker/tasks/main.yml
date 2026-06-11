@@ -15,3 +15,8 @@
 
 - name: Deploy Containers
   import_tasks: deploy_containers.yml
+
+# Wire Docker container logs into the Alloy agent (if present). Owned here,
+# not in co_hst_log, so docker concerns don't leak onto non-docker hosts.
+- name: Wire Docker logs into the Alloy log agent
+  import_tasks: wire_log_agent.yml
