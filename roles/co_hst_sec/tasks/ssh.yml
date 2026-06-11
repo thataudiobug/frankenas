@@ -18,33 +18,48 @@
     group: root
     mode: "0755"
 
-# `sshd -t` (run by the template's validate below) requires the privilege-
-# separation directory to exist or it errors out before even reading the
-# config ("Missing privilege separation directory: /run/sshd"). On a freshly
-# built container sshd may not have started yet, so /run/sshd doesn't exist.
-# /run is a tmpfs (gone on reboot), but sshd's systemd unit/init recreates it
-# on start, so creating it here only bridges the gap for this run — it does
-# not need to persist.
-- name: Ensure the sshd privilege-separation directory exists
-  ansible.builtin.file:
-    path: /run/sshd
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Install hardened sshd drop-in (validated)
+# `sshd -t` requires the privilege-separation directory /run/sshd, but on
+# Ubuntu 24.04 ssh is socket-activated: each connection spawns a transient
+# sshd unit with RuntimeDirectory=sshd, and systemd DELETES /run/sshd when
+# that instance exits. So creating the dir in a separate task loses a race —
+# Ansible's next connection spawns+exits an sshd instance that wipes it
+# before the validate runs. The only reliable fix is to recreate the dir and
+# run the test in ONE shell invocation (atomic), which Ansible's `validate:`
+# can't do (no shell chaining). So we write the drop-in, then validate the
+# full effective config in a single `mkdir -p ... && sshd -t` command, and
+# roll the file back if it's bad.
+- name: Install hardened sshd drop-in
   ansible.builtin.template:
     src: sshd_hardening.conf.j2
     dest: "/etc/ssh/sshd_config.d/{{ co_ssh_dropin_filename }}"
     owner: root
     group: root
     mode: "0644"
-    # `sshd -t -f %s` parses the staged drop-in as a config file and exits
-    # non-zero on any syntax/keyword error, so a malformed directive fails
-    # the task and the bad file is never written. (sshd applies built-in
-    # defaults for unspecified options, so a directives-only drop-in is a
-    # valid standalone config to test.) A reload of the full effective
-    # config still happens via the handler after the file is in place.
-    validate: "sshd -t -f %s"
+  register: _co_sshd_dropin
   notify: Reload sshd
+
+- name: Validate the effective sshd config (rollback on failure)
+  block:
+    # mkdir + test in one invocation so the socket-activation race can't
+    # delete /run/sshd between creating it and running sshd -t. `sshd -t`
+    # (no -f) checks the FULL assembled config — stock file + every drop-in —
+    # which is the real thing that will load, catching cross-file conflicts.
+    - name: Test the assembled sshd configuration
+      ansible.builtin.command:
+        cmd: bash -c 'mkdir -p /run/sshd && chmod 0755 /run/sshd && sshd -t'
+      changed_when: false
+  rescue:
+    # The new drop-in broke the effective config. Remove it so the running
+    # sshd (still on the old, valid config — the reload handler hasn't fired)
+    # isn't left a landmine on the next start, then fail loudly.
+    - name: Remove the invalid sshd drop-in
+      ansible.builtin.file:
+        path: "/etc/ssh/sshd_config.d/{{ co_ssh_dropin_filename }}"
+        state: absent
+
+    - name: Fail because the hardened sshd config is invalid
+      ansible.builtin.fail:
+        msg: >-
+          The rendered sshd drop-in produced an invalid effective
+          configuration (sshd -t failed); the drop-in was removed and sshd
+          left on its previous config. Check co_ssh_* vars.
