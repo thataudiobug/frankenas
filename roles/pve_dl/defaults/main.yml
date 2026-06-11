@@ -1,3 +1,14 @@
 ---
 # defaults file for pve_dl_ct
 platform: []
+
+# Pass the host's /dev/net/tun into this LXC. Needed by containers that
+# build their OWN tunnel inside the guest (e.g. a gluetun VPN container),
+# since that requires /dev/net/tun + NET_ADMIN in the container, which in an
+# unprivileged LXC only exists if the device is mapped in from the PVE host.
+# Off by default; set true in host_vars for hosts that run gluetun.
+#
+# (This logic previously lived in the now-deprecated dl_vpn_client role,
+# which ran host-level OpenVPN. It moved here because device passthrough is a
+# guest-build concern, independent of what tunnels the guest later runs.)
+pct_needs_tun: false
