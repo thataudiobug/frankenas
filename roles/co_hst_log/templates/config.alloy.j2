@@ -48,34 +48,6 @@ discovery.relabel "journal" {
 }
 {% endif %}
 
-{% if _log_docker | bool %}
-// ---------------------------------------------------------------------
-// Source: Docker container logs (discovered from the local daemon).
-// ---------------------------------------------------------------------
-discovery.docker "local" {
-  host = "unix:///var/run/docker.sock"
-}
-
-discovery.relabel "docker" {
-  targets = discovery.docker.local.targets
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/(.*)"
-    target_label  = "container"
-  }
-}
-
-loki.source.docker "containers" {
-  host       = "unix:///var/run/docker.sock"
-  targets    = discovery.relabel.docker.output
-  forward_to = [loki.write.central.receiver]
-  labels     = {
-    job  = "docker",
-    host = "{{ inventory_hostname }}",
-  }
-}
-{% endif %}
-
 {% if _log_files | length > 0 %}
 // ---------------------------------------------------------------------
 // Source: explicit file paths (e.g. NPM proxy logs, PVE task logs).
