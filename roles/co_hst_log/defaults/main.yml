@@ -46,7 +46,18 @@ co_log_loki_url: "http://{{ co_log_loki_host }}:{{ co_log_loki_port }}/loki/api/
 co_log_alloy_apt_key_url: "https://apt.grafana.com/gpg.key"
 co_log_alloy_apt_repo: "deb https://apt.grafana.com stable main"
 co_log_alloy_service_name: "alloy"
-co_log_alloy_config_path: "/etc/alloy/config.alloy"
+
+# Alloy loads a config DIRECTORY (all *.alloy files merged into one config),
+# not a single file. This lets other roles contribute source snippets that
+# reference the base sink without co_hst_log knowing about them — notably the
+# `docker` role drops a docker-source snippet here AFTER it installs Docker,
+# so docker concerns never leak onto non-docker hosts.
+co_log_alloy_config_dir: "/etc/alloy/config.d"
+# The base config co_hst_log owns (sink + journald + files). Numbered so it
+# loads first and additive snippets (e.g. 30-docker.alloy) sort after it.
+co_log_alloy_base_config: "{{ co_log_alloy_config_dir }}/10-base.alloy"
+# Alloy's env file; we point CONFIG_FILE at the directory here.
+co_log_alloy_env_file: "/etc/default/alloy"
 
 # =====================================================================
 # Source selection (catalog -> enabled -> overrides)
