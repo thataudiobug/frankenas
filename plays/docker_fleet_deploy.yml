@@ -5,8 +5,8 @@
   gather_facts: false
   connection: local
   roles:
-    - pve_dl
-  when: "'dropplets' in group_names"
+    - role: pve_dl
+      when: "'droplets' in group_names"
 
 - name: Configure docker hosts
   hosts: docker
