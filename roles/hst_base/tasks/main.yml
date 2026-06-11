@@ -8,17 +8,16 @@
 # per host once its required ports are known. SSH hardening and unattended
 # security upgrades are universally safe and stay on.
 
+# Shared security baseline. Baremetal hosts (the pct/vpn_clients exclusions
+# plus hosts_baremetal) default the in-guest firewall OFF in the role —
+# Proxmox runs its own firewall and a default-drop policy could knock out the
+# web UI / cluster links. SSH hardening + unattended upgrades stay on. All
+# knobs (co_fw_enabled, co_ssh_permit_root_login, ...) remain overridable per
+# host via normal vars; we deliberately do NOT pass them through include_role
+# vars here (that would be highest-precedence and block host_vars overrides).
 - name: Apply the common host security baseline
   ansible.builtin.include_role:
     name: co_hst_sec
-  vars:
-    # Baremetal: don't impose a default-drop firewall that could knock out
-    # the Proxmox web UI or cluster traffic. Turn on per host (host_vars)
-    # after declaring the needed co_fw_allow_ports_* entries.
-    co_fw_enabled: "{{ co_fw_enabled | default(false) }}"
-    # PVE may need root SSH by key for some tooling; prohibit-password keeps
-    # key login working while refusing passwords.
-    co_ssh_permit_root_login: "{{ co_ssh_permit_root_login | default('prohibit-password') }}"
 
 # Proxmox node hardening: enable the datacenter firewall master switch and
 # restrict the node's mgmt surfaces (web UI :8006, SSH, API) to OOB. The
