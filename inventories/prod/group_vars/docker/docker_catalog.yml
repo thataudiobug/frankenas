@@ -114,6 +114,11 @@ docker_containers_catalog:  # pick many
   # any host firewall. Needs /dev/net/tun + NET_ADMIN (so the host LXC must
   # set pct_needs_tun: true). It PUBLISHES the ports of every container that
   # shares its netns — so qbittorrent's web UI + torrent ports live here.
+  #
+  # Provider/credentials follow the catalog -> enabled pattern: the host sets
+  # vpn_provider_enabled: <key> (a vpn_provider_catalog entry in
+  # group_vars/vpn_clients), and that entry's gluetun env is merged over the
+  # base env below. TUI-manageable; no loose gluetun_* host_vars.
   gluetun:
     image: "qmcgaw/gluetun:latest"
     capabilities:
@@ -126,22 +131,15 @@ docker_containers_catalog:  # pick many
       - "6881:6881/udp"        # qbittorrent torrent UDP
     volumes:
       - '{{ droplet_bind_catalog.config.mnt }}/gluetun:/gluetun'
-    env:
-      # OpenVPN provider config comes from the vault (same credentials the
-      # old dl_vpn_client used). Defaults to a custom OpenVPN provider; the
-      # .ovpn is written to the gluetun config dir by dl_vpn_sidecar... see
-      # host_vars to point at a built-in provider instead if preferred.
-      VPN_SERVICE_PROVIDER: "{{ gluetun_provider | default('custom') }}"
-      VPN_TYPE: "{{ gluetun_vpn_type | default('openvpn') }}"
-      OPENVPN_USER: "{{ gluetun_openvpn_user | default('') }}"
-      OPENVPN_PASSWORD: "{{ gluetun_openvpn_password | default('') }}"
-      # Kill switch: block all non-tunnel traffic. The mgmt net is allowed
-      # through as an "outbound subnet" so the web UI stays reachable from
-      # OOB even when the tunnel is down (mirrors the old killswitch's
-      # mgmt-CIDR exception).
-      FIREWALL: "on"
-      FIREWALL_OUTBOUND_SUBNETS: "{{ gluetun_outbound_subnets | default('10.128.0.0/9') }}"
-      TZ: "america/detroit"
+    env: >-
+      {{
+        {
+          'FIREWALL': 'on',
+          'FIREWALL_OUTBOUND_SUBNETS': vpn_outbound_subnets | default('10.128.0.0/9'),
+          'TZ': 'america/detroit'
+        }
+        | combine(vpn_provider_catalog[vpn_provider_enabled] | default({}, true))
+      }}
     restart_policy: "unless-stopped"
 
   qbittorrent:
