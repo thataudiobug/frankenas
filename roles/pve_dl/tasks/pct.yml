@@ -159,6 +159,40 @@
     state: present
   when: gpu_enabled is true
 
+# -- TUN device passthrough (for in-guest tunnels, e.g. gluetun) -------
+#
+# Containers that build their own tunnel (gluetun) need /dev/net/tun +
+# NET_ADMIN inside the guest. In an unprivileged LXC that device only exists
+# if mapped in from the PVE host. Gated on pct_needs_tun (host_var). Done
+# BEFORE start so the device is present on first boot.
+#
+# NOTE: /etc/pve/lxc/<vmid>.conf lives on pmxcfs, which strips comment lines
+# its parser doesn't recognise — so blockinfile markers get eaten and the
+# block re-appends every run. lineinfile matches the literal config key
+# instead, staying idempotent with no markers to lose. (Moved here from the
+# deprecated dl_vpn_client role.)
+- name: Add tun device mappings for the container
+  ansible.builtin.lineinfile:
+    path: "/etc/pve/lxc/{{ was_built.vmid }}.conf"
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "lxc.cgroup2.devices.allow: c 10:200 rwm"
+    - "lxc.mount.entry: /dev/net dev/net none bind,create=dir"
+  delegate_to: pve
+  connection: ssh
+  when: pct_needs_tun | bool
+  register: pct_tun_added
+
+- name: Chown the tun device for the container's mapped root
+  ansible.builtin.file:
+    path: /dev/net/tun
+    owner: 100000
+    group: 100000
+  delegate_to: pve
+  connection: ssh
+  when: pct_needs_tun | bool
+
 - name: Start Container
   community.proxmox.proxmox:
     node: pve
