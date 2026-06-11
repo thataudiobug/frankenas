@@ -21,14 +21,14 @@ droplet_bind_enabled:
   config:
 dns_enabled: oob
 
-# VPN now runs as a gluetun docker sidecar (not host OpenVPN). The host only
-# needs /dev/net/tun passed through from the PVE host for gluetun to build
-# its tunnel; pve_dl provisions it when this is true.
-pct_needs_tun: true
+# VPN runs as a gluetun docker sidecar. The /dev/net/tun passthrough gluetun
+# needs is inferred at build time by pve_dl (host is both pct + vpn_clients),
+# so there's no flag to set here — just select the provider below.
 
 # Gluetun VPN provider selection (catalog -> enabled). Names an entry in
 # vpn_provider_catalog (group_vars/vpn_clients); that entry supplies the
-# gluetun provider env + vault credentials. TUI-manageable.
+# gluetun provider env + vault credentials, and pve_dl writes its custom
+# .ovpn to the config bind at build. TUI-manageable.
 vpn_provider_enabled: ca_toronto
 # Optional: subnets allowed out past gluetun's kill switch (so the qbit web
 # UI stays reachable from OOB even if the tunnel drops). Defaults to the OOB
