@@ -40,10 +40,16 @@ co_chrony_enabled: true
 #     it), so the in-guest nftables baseline would be redundant. qemu guests
 #     get the same treatment once pve_fw covers them.
 #
-#   * dl_base still applies for non-pct guests; hst_base leaves it off by
-#     default because baremetal (Proxmox) ships its own firewall and a
-#     default-drop policy can knock out the web UI / cluster links.
-co_fw_enabled: "{{ 'vpn_clients' not in group_names and 'pct' not in group_names }}"
+#   * It DEFERS on baremetal (`hosts_baremetal`, e.g. the Proxmox node):
+#     Proxmox ships its own firewall (managed by es_hst_pve) and a
+#     default-drop nftables policy could knock out the web UI / cluster
+#     links. SSH hardening + unattended upgrades still apply there.
+#
+#   * dl_base still applies the in-guest firewall for non-pct guests.
+#
+# All of the above is just a default — override co_fw_enabled per host/group
+# (host_vars) to force it on or off anywhere.
+co_fw_enabled: "{{ 'vpn_clients' not in group_names and 'pct' not in group_names and 'hosts_baremetal' not in group_names }}"
 
 # =====================================================================
 # Management network — MUST stay reachable through every layer.
