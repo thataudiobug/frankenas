@@ -39,6 +39,12 @@ dns_srv_catalog:  # pick one
       - {name: "pve",        ip: "10.128.0.1"}
       - {name: "dl-dns-srv", ip: "10.128.0.2"}
       - {name: "c2",         ip: "10.128.0.3"}
+      # Identity + observability anchors. Both sit below the DHCP pool start
+      # (.10), so they get no lease-registered record — these static entries
+      # are what make their <name>.oob.frankenas.lan FQDNs resolve (which is
+      # what their ansible_host points at).
+      - {name: "orthax",     ip: "10.128.0.4"}   # Authelia/Redis (identity anchor)
+      - {name: "mollymauk",  ip: "10.128.0.5"}   # Loki/Grafana (log server)
     upstream_dns:
       - "1.1.1.1"
       - "9.9.9.9"

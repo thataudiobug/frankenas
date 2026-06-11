@@ -1,0 +1,108 @@
+---
+# defaults file for dl_auth_srv
+#
+# dl_auth_srv prepares the central authentication / SSO server (Orthax):
+# Authelia + Redis. It renders Authelia's configuration.yml, the YAML user
+# database, and the secret material onto the host's bind storage so the
+# Docker stack (authelia + redis, deployed via the `docker` role) can mount
+# them.
+#
+# Authelia is the AUTH/SSO + AUTHORIZATION layer, NOT a directory. The user
+# store is a flat YAML file (argon2id-hashed passwords) — simple to start,
+# and swappable for LDAP later without changing the web-auth design.
+#
+# Division of labour (same as dl_log_srv):
+#   * pve_dl      builds the LXC + applies the config bind + OOB anchor .4
+#   * dl_auth_srv (this role) lays out storage + renders config/users/secrets
+#   * docker role deploys the authelia + redis containers (group `identity`)
+#   * NPM forward-auth wiring (separate) gates each protected proxy host
+
+# -- Storage layout (on the config bind) -------------------------------
+# Authelia is light; SQLite (TOTP secrets, identity) + config live on the
+# config bind. Redis holds sessions (ephemeral-ish), also on the bind so
+# they survive a container recreate.
+auth_srv_config_root: "/mnt/config/authelia"
+auth_srv_redis_root: "/mnt/config/redis"
+auth_srv_dirs:
+  - "{{ auth_srv_config_root }}"
+  - "{{ auth_srv_redis_root }}"
+
+# -- Identity / domain -------------------------------------------------
+# The root protected domain. The session cookie is scoped here so SSO works
+# across every *.frankenas.com app behind NPM. The portal lives at the
+# auth_* subdomain.
+auth_srv_root_domain: "frankenas.com"
+auth_srv_portal_url: "https://auth.{{ auth_srv_root_domain }}"
+auth_srv_totp_issuer: "{{ auth_srv_root_domain }}"
+
+# -- Listen / ports ----------------------------------------------------
+# Authelia listens on 9091 (the forward-auth endpoint NPM calls, and the
+# login portal). Published on the OOB anchor; NPM reaches it over OOB and
+# the public path comes through NPM, not directly.
+auth_srv_port: 9091
+auth_srv_redis_port: 6379
+# OOB self-IP for binding the published container ports (static anchor).
+auth_srv_oob_ip: "10.128.0.4"
+
+# -- Session / regulation ----------------------------------------------
+auth_srv_session_expiration: "1h"
+auth_srv_session_inactivity: "5m"
+# Brute-force regulation: lock an account after N failures within find_time.
+auth_srv_regulation_max_retries: 3
+auth_srv_regulation_find_time: "2m"
+auth_srv_regulation_ban_time: "10m"
+
+# -- Secrets (FROM VAULT) ----------------------------------------------
+# These MUST be overridden from the vault. The role asserts they are not the
+# placeholders below before rendering, so a real secret is always required.
+#   * session secret       — signs/encrypts the session cookie
+#   * storage encryption    — encrypts TOTP secrets at rest in SQLite
+#   * reset-password JWT     — signs password-reset links
+#   * redis password        — auth between Authelia and Redis
+auth_srv_session_secret: "CHANGE_ME_VAULT"
+auth_srv_storage_encryption_key: "CHANGE_ME_VAULT"
+auth_srv_jwt_secret: "CHANGE_ME_VAULT"
+auth_srv_redis_password: "CHANGE_ME_VAULT"
+
+# -- Users -------------------------------------------------------------
+# Users now live in LLDAP (the directory), NOT in a file here. Create and
+# manage them in the LLDAP web UI; Authelia authenticates against LLDAP via
+# the LDAP backend below. This removes the config-drift problem and gives
+# users permanent, self-service password changes.
+
+# -- LDAP backend (LLDAP) ----------------------------------------------
+# Authelia binds to LLDAP using its built-in 'lldap' implementation template
+# (handles all attribute/filter mappings). LLDAP runs in the same identity
+# stack, reachable over the docker network by name.
+auth_srv_ldap_implementation: "lldap"
+auth_srv_ldap_address: "ldap://lldap:3890"
+auth_srv_ldap_base_dn: "dc=frankenas,dc=com"
+# Bind account (created in LLDAP, granted lldap_password_manager so Authelia
+# can change passwords). DN follows LLDAP's people OU layout.
+auth_srv_ldap_bind_user: "authelia_bind"
+auth_srv_ldap_bind_dn: "uid={{ auth_srv_ldap_bind_user }},ou=people,{{ auth_srv_ldap_base_dn }}"
+# Bind password — FROM VAULT (same value as the LLDAP bind account). Shared
+# with dl_ldap_srv's ldap_srv_bind_password.
+auth_srv_ldap_bind_password: "CHANGE_ME_VAULT"
+# How often Authelia re-checks LDAP for user/group updates.
+auth_srv_ldap_refresh_interval: "1m"
+# Allow Authelia's self-service password reset/change (requires the bind
+# account to hold lldap_password_manager in LLDAP).
+auth_srv_password_reset_disable: false
+auth_srv_password_change_disable: false
+
+# -- Access control (catalog -> rules) ---------------------------------
+# Per-domain authorization + factor level. See authelia_access_catalog in
+# group_vars. default_policy: deny means an app with no rule is unreachable.
+auth_srv_default_policy: "deny"
+authelia_access_catalog: []
+
+# -- Trusted proxies (real client IP behind NPM / Cloudflare) ----------
+# Authelia derives the real client IP from X-Forwarded-For sent by NPM. List
+# the proxy/management nets it should trust. No Cloudflare-side config is
+# needed — NPM already forwards the client IP.
+auth_srv_trusted_proxies:
+  - "10.128.0.0/9"   # OOB (NPM reaches Authelia over OOB)
+  - "10.0.0.0/9"     # WAN service segment (NPM's WAN side)
+
+auth_srv_verify: true

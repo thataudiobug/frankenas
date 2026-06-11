@@ -1,0 +1,19 @@
+---
+# handlers file for dl_log_srv
+#
+# The containers are owned by the `docker` role; here we just bounce them so
+# they pick up freshly-rendered config. Uses the docker module to recreate.
+
+- name: Recreate loki container
+  community.docker.docker_container:
+    name: loki
+    state: started
+    restart: true
+  failed_when: false   # container may not exist yet on first provision
+
+- name: Recreate grafana container
+  community.docker.docker_container:
+    name: grafana
+    state: started
+    restart: true
+  failed_when: false

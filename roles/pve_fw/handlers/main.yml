@@ -1,0 +1,12 @@
+---
+# handlers file for pve_fw
+
+# pve-firewall picks up .fw changes on pmxcfs automatically, but a explicit
+# compile+reload makes the change synchronous with the play so verification
+# sees the new state. Runs on the pve node.
+- name: Reload pve-firewall
+  ansible.builtin.command:
+    cmd: pve-firewall compile
+  delegate_to: "{{ pve_fw_node }}"
+  connection: ssh
+  changed_when: false

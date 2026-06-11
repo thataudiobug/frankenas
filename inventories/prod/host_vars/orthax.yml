@@ -1,0 +1,58 @@
+# orthax — central identity stack: LLDAP (directory) + Authelia (SSO) + Redis.
+#
+# Identity infrastructure: pinned to the RESERVED identity anchor 10.128.0.4
+# (held for exactly this since the oob-dns-dhcp spec). NPM forward-auths to
+# Authelia, Authelia authenticates against LLDAP, and it sits adjacent to the
+# recovery path, so it gets a static anchor rather than a DHCP lease.
+#
+# OS on the s8 template — the stack is light and writes only to the config
+# bind (LLDAP SQLite directory, Authelia SQLite, Redis AOF). Authelia is
+# reached publicly via NPM; LLDAP/Authelia/Redis ports are OOB-only.
+#
+# BREAK-GLASS: the directory gates the WEB path only. SSH to this and the
+# other recovery-path hosts stays key-based and independent — a broken
+# directory/Authelia must never lock us out of the means to repair it.
+ansible_host: orthax.oob.frankenas.lan
+
+os_enabled: "ubuntu"
+compute_enabled: "small"
+storage_enabled: "s8"
+dns_enabled: oob
+users_enabled: [casey, robot]
+
+network_enabled:
+  wan:        # apt + container image pulls
+  oob:
+    ip: "10.128.0.4"          # reserved identity anchor
+
+# LLDAP + Authelia + Redis state all live on the config bind.
+droplet_bind_enabled:
+  config:
+
+# Deploy the LLDAP + Authelia + Redis stack here.
+docker_groups_enabled:
+  identity:
+
+# Hypervisor-enforced firewall: Authelia (9091), Redis (6379), LLDAP LDAP
+# (3890) + web UI (17170) reachable from OOB only. Public auth is via NPM.
+firewall_enabled: identity
+
+# Ship logs (Authelia auth events + LLDAP are JSON to journald via docker).
+log_sources_enabled: [docker]
+
+# -- Secrets: OVERRIDE FROM VAULT --------------------------------------
+# dl_auth_srv + dl_ldap_srv refuse to run with the placeholders. Wire these
+# to vault_* entries (see group_vars/all/vault.yml):
+#
+# Authelia:
+# auth_srv_session_secret:         "{{ vault_authelia_session_secret }}"
+# auth_srv_storage_encryption_key: "{{ vault_authelia_storage_key }}"
+# auth_srv_jwt_secret:             "{{ vault_authelia_jwt_secret }}"
+# auth_srv_redis_password:         "{{ vault_authelia_redis_password }}"
+# auth_srv_ldap_bind_password:     "{{ vault_lldap_bind_password }}"   # == ldap_srv_bind_password
+#
+# LLDAP:
+# ldap_srv_jwt_secret:             "{{ vault_lldap_jwt_secret }}"
+# ldap_srv_key_seed:               "{{ vault_lldap_key_seed }}"
+# ldap_srv_admin_password:         "{{ vault_lldap_admin_password }}"
+# ldap_srv_bind_password:          "{{ vault_lldap_bind_password }}"   # == auth_srv_ldap_bind_password

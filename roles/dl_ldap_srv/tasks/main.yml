@@ -1,0 +1,47 @@
+---
+# tasks file for dl_ldap_srv
+#
+# Prepares storage for LLDAP and verifies the directory. The container
+# itself (env-configured) is deployed by the `docker` role. Sequence:
+#   1. preflight (config bind present, secrets set)
+#   2. create the LLDAP data dir on the bind
+#   3. verify the directory answers
+
+# -- 1. Preflight ------------------------------------------------------
+- name: Assert the config bind is available
+  ansible.builtin.assert:
+    that:
+      - ldap_srv_data_root is defined
+      - (ldap_srv_data_root | dirname) == '/mnt/config'
+    fail_msg: >-
+      Expected the config bind at /mnt/config. Ensure Orthax enables the
+      'config' droplet_bind and pve_dl applied it before this role runs.
+    quiet: true
+
+- name: Refuse to run with placeholder LLDAP secrets
+  ansible.builtin.assert:
+    that:
+      - ldap_srv_jwt_secret != "CHANGE_ME_VAULT"
+      - ldap_srv_key_seed != "CHANGE_ME_VAULT"
+      - ldap_srv_admin_password != "CHANGE_ME_VAULT"
+      - ldap_srv_bind_password != "CHANGE_ME_VAULT"
+    fail_msg: >-
+      One or more LLDAP secrets is still the placeholder. Set
+      ldap_srv_jwt_secret, ldap_srv_key_seed, ldap_srv_admin_password and
+      ldap_srv_bind_password from the vault.
+    quiet: true
+
+# -- 2. Storage --------------------------------------------------------
+- name: Create the LLDAP data directory on the config bind
+  ansible.builtin.file:
+    path: "{{ ldap_srv_data_root }}"
+    state: directory
+    # LLDAP container defaults to uid/gid 1000.
+    owner: "1000"
+    group: "1000"
+    mode: "0750"
+
+# -- 3. Verify ---------------------------------------------------------
+- name: Verify the LLDAP directory
+  ansible.builtin.include_tasks: verify.yml
+  when: ldap_srv_verify | bool

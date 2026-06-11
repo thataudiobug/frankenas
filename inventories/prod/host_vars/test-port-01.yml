@@ -16,3 +16,7 @@ network_enabled:
 
 
 users_enabled: [casey, robot]
+
+# Log shipping: this host is in the `docker` group, so capture container
+# logs alongside journald (journald ships automatically).
+log_sources_enabled: [docker]

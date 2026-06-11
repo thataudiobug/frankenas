@@ -1,0 +1,171 @@
+---
+# tasks file for pve_fw
+#
+# Renders a droplet's Proxmox firewall file on the pve node so ingress is
+# enforced by the HYPERVISOR, not inside the (potentially compromised)
+# guest. Runs against droplets but does all its work on `pve` via delegation
+# (the .fw files live on pmxcfs at /etc/pve/firewall/<vmid>.fw).
+#
+# Sequence:
+#   1. resolve profile (catalog -> enabled -> overrides)
+#   2. preflight asserts (incl. the no-lockout SSH-from-mgmt guarantee)
+#   3. resolve this guest's vmid on pve
+#   4. (optional) confirm the cluster firewall master switch is on
+#   5. render + validate the <vmid>.fw file
+#   6. (optional) verify
+
+# -- 0. Skip cleanly when the host hasn't opted in ---------------------
+- name: Note when no firewall profile is selected
+  ansible.builtin.debug:
+    msg: "firewall_enabled is unset for {{ inventory_hostname }} — skipping pve_fw."
+  when: firewall_enabled | length == 0
+
+- name: Run pve_fw only when a profile is selected
+  when: firewall_enabled | length > 0
+  block:
+
+    # -- 1. Profile selection ------------------------------------------
+    - name: Assert the selected firewall profile exists in the catalog
+      ansible.builtin.assert:
+        that:
+          - firewall_catalog is mapping
+          - firewall_enabled in firewall_catalog
+        fail_msg: >-
+          firewall_enabled ('{{ firewall_enabled }}') must name an entry in
+          firewall_catalog. Available: {{ firewall_catalog.keys() | list }}
+        quiet: true
+
+    - name: Resolve the profile with per-host overrides merged on top
+      ansible.builtin.set_fact:
+        _fw: >-
+          {{
+            firewall_catalog[firewall_enabled]
+            | combine(firewall_overrides | default({}, true), recursive=True)
+          }}
+
+    # -- 2. Preflight --------------------------------------------------
+    - name: Assert the profile is well-formed
+      ansible.builtin.assert:
+        that:
+          - _fw.policy_in | default('DROP') in ['ACCEPT', 'DROP', 'REJECT']
+          - _fw.policy_out | default('ACCEPT') in ['ACCEPT', 'DROP', 'REJECT']
+          - _fw.rules | default([]) is iterable
+        fail_msg: >-
+          Profile '{{ firewall_enabled }}' has an invalid policy_in/policy_out
+          (must be ACCEPT|DROP|REJECT) or a non-list rules entry.
+        quiet: true
+
+    - name: Assert each rule is well-formed
+      ansible.builtin.assert:
+        that:
+          - item.type | default('in') in ['in', 'out', 'forward', 'group']
+          - item.action is defined
+        fail_msg: "Malformed firewall rule in '{{ firewall_enabled }}': {{ item }}"
+        quiet: true
+      loop: "{{ _fw.rules | default([]) }}"
+
+    # -- 3. Resolve vmid on pve ----------------------------------------
+    #
+    # We need the numeric vmid to name the .fw file. pve_dl exposes it as
+    # was_built.vmid when it just built the guest; when pve_fw runs stand-
+    # alone we look it up from the guest's hostname via the API.
+    - name: Use vmid from a just-completed build if available
+      ansible.builtin.set_fact:
+        _fw_vmid: "{{ was_built.vmid }}"
+      when:
+        - was_built is defined
+        - was_built.vmid is defined
+
+    - name: Look up vmid by hostname (stand-alone runs)
+      community.proxmox.proxmox_vm_info:
+        node: "{{ pve_fw_node }}"
+        api_host: "{{ pve_fw_api_host }}"
+        api_user: "{{ pve_fw_api_user }}"
+        api_token_id: "{{ pve_fw_api_token_id }}"
+        api_token_secret: "{{ pve_fw_api_token_secret }}"
+        name: "{{ inventory_hostname }}"
+      register: _fw_vm_info
+      delegate_to: localhost
+      when: _fw_vmid is not defined
+
+    - name: Bind the resolved vmid
+      ansible.builtin.set_fact:
+        _fw_vmid: "{{ _fw_vm_info.proxmox_vms[0].vmid }}"
+      when:
+        - _fw_vmid is not defined
+        - _fw_vm_info.proxmox_vms | default([]) | length > 0
+
+    - name: Assert we resolved a vmid
+      ansible.builtin.assert:
+        that:
+          - _fw_vmid is defined
+          - _fw_vmid | string | length > 0
+        fail_msg: >-
+          Could not determine the vmid for {{ inventory_hostname }}. Ensure
+          the guest exists on {{ pve_fw_node }} (or run after pve_dl).
+        quiet: true
+
+    # -- 4. Cluster firewall master switch -----------------------------
+    #
+    # Guest .fw rules are inert until the datacenter firewall is enabled.
+    # Read cluster.fw and warn loudly if it's off — we do NOT flip it here
+    # (that's the PVE host workflow's job, es_hst_pve), to keep concerns
+    # separated and avoid a guest role changing cluster-wide state.
+    - name: Read the cluster firewall options
+      ansible.builtin.slurp:
+        src: /etc/pve/firewall/cluster.fw
+      register: _fw_cluster_raw
+      delegate_to: "{{ pve_fw_node }}"
+      connection: ssh
+      failed_when: false
+      when: pve_fw_check_datacenter_enabled | bool
+
+    - name: Warn if the cluster firewall is not enabled
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: the datacenter (cluster) firewall does not appear to be
+          enabled on {{ pve_fw_node }} (/etc/pve/firewall/cluster.fw missing
+          'enable: 1'). Per-guest rules for {{ inventory_hostname }} will NOT
+          take effect until it is. Enable it via the PVE host workflow
+          (es_hst_pve) or Datacenter -> Firewall.
+      when:
+        - pve_fw_check_datacenter_enabled | bool
+        - >-
+          (_fw_cluster_raw.content is not defined) or
+          ('enable: 1' not in (_fw_cluster_raw.content | b64decode))
+
+    # -- 5. Render + validate the <vmid>.fw file -----------------------
+    #
+    # NOTE on safety: unlike `nft -c`/`sshd -t`, pve-firewall has no
+    # check-this-file mode — `pve-firewall compile` always compiles the LIVE
+    # config, so it can't pre-validate a staged temp file. We mitigate two
+    # ways: (a) the template is rendered from asserted-valid inputs (step 2),
+    # and (b) we compile AFTER writing and fail the play if the assembled
+    # ruleset is bad. pve-firewall itself will not push a broken ruleset to
+    # iptables — it keeps the last good one and logs — so a bad render fails
+    # loudly here rather than silently dropping traffic.
+    - name: Render the guest firewall file
+      ansible.builtin.template:
+        src: guest.fw.j2
+        dest: "/etc/pve/firewall/{{ _fw_vmid }}.fw"
+        owner: root
+        group: root
+        mode: "0640"
+      delegate_to: "{{ pve_fw_node }}"
+      connection: ssh
+      notify: Reload pve-firewall
+
+    - name: Compile the full firewall config to catch errors
+      ansible.builtin.command:
+        cmd: pve-firewall compile
+      delegate_to: "{{ pve_fw_node }}"
+      connection: ssh
+      changed_when: false
+
+    - name: Flush handlers so the firewall reload happens before verify
+      ansible.builtin.meta: flush_handlers
+
+    # -- 6. Verify -----------------------------------------------------
+    - name: Verify the applied guest firewall
+      ansible.builtin.include_tasks: verify.yml
+      when: pve_fw_verify | bool

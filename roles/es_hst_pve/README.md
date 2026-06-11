@@ -1,38 +1,55 @@
-Role Name
-=========
+es_hst_pve
+==========
 
-A brief description of the role goes here.
+Hardens the **Proxmox VE node itself** (a baremetal host concern — guest
+provisioning lives in `pve_dl`). Two responsibilities:
 
-Requirements
-------------
+1. **Enables the datacenter (cluster-wide) firewall master switch.** Until
+   `cluster.fw` has `enable: 1`, every per-guest `.fw` file rendered by
+   `pve_fw` and the node's own `host.fw` are inert. This role owns that
+   switch so guest roles don't change cluster-wide state.
+2. **Restricts the node's management surfaces to OOB.** The Proxmox web UI /
+   API (`:8006`), SSH (`:22`), SPICE (`:3128`) and VNC consoles are allowed
+   only from `pve_node_mgmt_cidr` (`10.128.0.0/9`); WAN exposure is denied by
+   a `policy_in: DROP` host policy.
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+SSH hardening and unattended security upgrades for the node come from
+`co_hst_sec` (via `hst_base`, since PVE is a host) and are **not** duplicated
+here.
 
-Role Variables
+Lockout safety
 --------------
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+Preflight asserts that `pve_node_mgmt_cidr` is a valid CIDR and that SSH
+(`22`) is in `pve_node_mgmt_ports` before any DROP policy is written —
+otherwise the play would cut the session Ansible rides on. Proxmox also
+keeps built-in defaults that avoid severing your active management session
+when the firewall is first enabled. Still: **keep an out-of-band console
+(IPMI / physical) available the first time you enable this on a live node.**
 
-Dependencies
-------------
+Key variables
+-------------
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+- `pve_node_mgmt_cidr` (default `10.128.0.0/9`) — the only source allowed to
+  reach the node's management surfaces.
+- `pve_node_wan_cidr` (default `10.0.0.0/9`) — the WAN service segment
+  (documentary; node services are not exposed here).
+- `pve_dc_firewall_enable` (default `true`) — the cluster master switch.
+- `pve_node_mgmt_ports` — ports opened to the OOB net (web UI, SSH, SPICE,
+  VNC by default).
+- `pve_node_cluster_peers` (default `[]`) — peer CIDRs for corosync / node
+  SSH if you cluster later.
 
-Example Playbook
-----------------
+Files written
+-------------
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+- `/etc/pve/firewall/cluster.fw` — datacenter master switch + cluster policy.
+- `/etc/pve/nodes/<node>/host.fw` — node management firewall.
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+Both are compiled with `pve-firewall compile` after writing; a bad render
+fails the play rather than being pushed to iptables.
 
 License
 -------
 
-BSD
-
-Author Information
-------------------
-
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+MIT

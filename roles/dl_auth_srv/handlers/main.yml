@@ -1,0 +1,12 @@
+---
+# handlers file for dl_auth_srv
+#
+# Containers are owned by the `docker` role; bounce Authelia so it reloads
+# config/users. Redis isn't restarted (config is static + env-driven).
+
+- name: Recreate authelia container
+  community.docker.docker_container:
+    name: authelia
+    state: started
+    restart: true
+  failed_when: false   # container may not exist yet on first provision

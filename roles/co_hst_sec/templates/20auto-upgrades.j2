@@ -1,0 +1,9 @@
+// {{ ansible_managed }}
+//
+// Managed by co_hst_sec. Drives apt's periodic timer: refresh package
+// lists and run unattended-upgrade on the cadence below (days).
+
+APT::Periodic::Update-Package-Lists "{{ co_uu_update_package_lists }}";
+APT::Periodic::Unattended-Upgrade "{{ co_uu_unattended_upgrade_interval }}";
+APT::Periodic::Download-Upgradeable-Packages "1";
+APT::Periodic::AutocleanInterval "7";

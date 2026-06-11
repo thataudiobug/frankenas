@@ -1,0 +1,57 @@
+---
+# defaults file for dl_ldap_srv
+#
+# dl_ldap_srv stands up LLDAP — a lightweight LDAP directory with a friendly
+# web UI for user/group management — as the user store behind Authelia. It
+# co-locates with Authelia + Redis on Orthax (the identity stack), so users
+# can change their own passwords permanently via LLDAP's UI (or Authelia's
+# password-reset, which writes through to LLDAP) without config drift.
+#
+# LLDAP is configured ENTIRELY via LLDAP_* environment variables (no config
+# file needed), so this role mainly lays out the data dir and documents the
+# wiring; the container env (in docker_containers_catalog) carries the real
+# config. The role's verify step confirms the directory is answering.
+#
+# Division of labour (same as the other service stacks):
+#   * pve_dl       builds/extends the LXC + the config bind (shared w/ Authelia)
+#   * dl_ldap_srv  (this role) prepares the LLDAP data dir + verifies
+#   * docker role  deploys the lldap container (identity group)
+#   * dl_auth_srv  points Authelia's LDAP backend at it
+
+# -- Storage -----------------------------------------------------------
+# LLDAP persists its config + SQLite directory store under /data. Lives on
+# the config bind alongside Authelia/Redis.
+ldap_srv_data_root: "/mnt/config/lldap"
+
+# -- Directory identity ------------------------------------------------
+# Base DN for the directory. Mirror the public domain so DNs read naturally.
+# Authelia's lldap implementation derives the people/groups OUs from this.
+ldap_srv_base_dn: "dc=frankenas,dc=com"
+
+# LLDAP listens on two ports: LDAP (3890) and the web UI (17170). Both are
+# published on the OOB anchor only — the directory is never WAN-reachable.
+ldap_srv_ldap_port: 3890
+ldap_srv_web_port: 17170
+ldap_srv_oob_ip: "10.128.0.4"
+
+# -- Bind accounts -----------------------------------------------------
+# Authelia binds to LLDAP as a dedicated read-only-ish service account. Per
+# the LLDAP/Authelia guide, to allow Authelia-driven password changes this
+# account needs the lldap_password_manager permission (set in the LLDAP UI
+# after first boot). The username here is created in LLDAP; the password is
+# the vault-supplied bind password.
+ldap_srv_bind_user: "authelia_bind"
+
+# -- Secrets (FROM VAULT) ----------------------------------------------
+# LLDAP_JWT_SECRET  — signs LLDAP's own web sessions
+# LLDAP_KEY_SEED    — derives the directory's private key material
+# admin password    — the initial LLDAP admin (UI login) password
+# These are consumed by the container env (catalog) but asserted here so a
+# deploy can't silently come up with default/placeholder secrets.
+ldap_srv_jwt_secret: "CHANGE_ME_VAULT"
+ldap_srv_key_seed: "CHANGE_ME_VAULT"
+ldap_srv_admin_password: "CHANGE_ME_VAULT"
+# The bind account password Authelia uses (also referenced by dl_auth_srv).
+ldap_srv_bind_password: "CHANGE_ME_VAULT"
+
+ldap_srv_verify: true

@@ -1,38 +1,62 @@
-Role Name
+es_svc_rp
 =========
 
-A brief description of the role goes here.
+Reverse-proxy (NPM) host configuration. Currently: the **Authelia
+forward-auth integration** — drops two reusable nginx snippets where NPM can
+`include` them, so each proxy host can be gated behind Authelia by adding two
+lines in its NPM **Advanced** config.
 
-Requirements
-------------
+Why snippets + manual include
+-----------------------------
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+NPM owns and rewrites `/data/nginx/proxy_host/*.conf`, so editing those
+directly isn't idempotent. The supported pattern is reusable snippet files
+referenced from each proxy host's Advanced tab. This makes protection
+**opt-in and reversible per service** (delete the two lines) — which
+preserves the break-glass property: you can drop Authelia in front of an app,
+or take it back off, without Authelia needing to be up.
 
-Role Variables
---------------
+Files dropped (under `{{ rp_npm_data_path }}/nginx/custom/`, visible inside
+the container at `/data/nginx/custom/`):
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+- `authelia-authrequest.conf` — the internal `/authelia` subrequest endpoint
+  (server scope, include once per protected host).
+- `authelia-location.conf` — the `auth_request` enforcement + portal redirect
+  (location scope, include inside the location block).
 
-Dependencies
-------------
+Protecting a proxy host
+------------------------
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+In NPM, edit the proxy host → **Advanced** tab, add:
 
-Example Playbook
-----------------
+```nginx
+include /data/nginx/custom/authelia-authrequest.conf;
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+location / {
+    include /data/nginx/custom/authelia-location.conf;
+    # ... NPM's existing proxy_pass etc. ...
+}
+```
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+Authorization (which group, one_factor vs two_factor) is decided by
+**Authelia's** `authelia_access_catalog` keyed on the request domain, not
+here. This snippet just enforces whatever Authelia decides.
+
+Behind Cloudflare
+-----------------
+
+The snippet forwards `X-Forwarded-For` so Authelia sees the real client IP —
+no Cloudflare-side config needed.
+
+Key variables
+-------------
+
+- `rp_npm_data_path` (`/mnt/config/npm/data`) — NPM's bind-mounted `/data`.
+- `rp_authelia_internal_url` — Authelia's OOB endpoint NPM calls.
+- `rp_authelia_portal_url` — public portal redirect target.
+- `rp_authelia_enabled` — master toggle.
 
 License
 -------
 
 BSD
-
-Author Information
-------------------
-
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).

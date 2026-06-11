@@ -1,0 +1,8 @@
+galaxy_info:
+  author: frankenas
+  description: Hypervisor-enforced (Proxmox) per-guest firewalling driven by a firewall_catalog
+  license: MIT
+  min_ansible_version: "2.1"
+  galaxy_tags: []
+
+dependencies: []

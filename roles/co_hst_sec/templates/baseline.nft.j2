@@ -1,0 +1,80 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }}
+#
+# Baseline host firewall for {{ inventory_hostname }} (managed by co_hst_sec).
+#
+# Policy: default-DROP on input and forward, default-ACCEPT on output. This
+# is an INGRESS baseline — it does not restrict what the host may send (see
+# dl_vpn_client for a fail-closed egress kill switch). `inet` covers both
+# IPv4 and IPv6 in one table.
+#
+# Allowed inbound, in order:
+#   1. loopback
+#   2. established/related return traffic (invalid dropped)
+#   3. SSH from the management net (so C2/Ansible never lock out)
+#   4. ICMP/ICMPv6 from the management net (diagnostics)        [optional]
+#   5. operator-declared service ports (public and per-CIDR)    [optional]
+# Everything else falls through to the drop policy.
+
+flush ruleset
+
+table inet filter {
+
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        # 1. Loopback.
+        iif "lo" accept
+
+        # 2. Return traffic for connections we (or allowed peers) initiated.
+        ct state established,related accept
+        ct state invalid drop
+
+{% if co_fw_allow_ssh_from_mgmt | bool %}
+        # 3. SSH from the management network — the lockout-safety rule.
+        ip saddr {{ co_mgmt_cidr }} tcp dport {{ co_fw_ssh_port }} accept
+{% for cidr in co_admin_extra_cidrs %}
+        ip saddr {{ cidr }} tcp dport {{ co_fw_ssh_port }} accept
+{% endfor %}
+{% endif %}
+
+        # IPv6 neighbor discovery / PMTU. These are required for IPv6 to
+        # function at all under a drop policy (NS/NA/RS/RA are link-local
+        # housekeeping, not WAN exposure). Harmless no-op if IPv6 is
+        # disabled on the host.
+        icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, packet-too-big, time-exceeded, parameter-problem } accept
+
+{% if co_fw_allow_icmp_from_mgmt | bool %}
+        # 4. ICMP echo (ping) from the management network — diagnostics.
+        #    The mgmt net is IPv4; ICMPv6 echo is intentionally not opened.
+        ip saddr {{ co_mgmt_cidr }} icmp type echo-request accept
+{% for cidr in co_admin_extra_cidrs %}
+        ip saddr {{ cidr }} icmp type echo-request accept
+{% endfor %}
+{% endif %}
+
+{% if co_fw_allow_ports_public | length > 0 %}
+        # 5a. Operator-declared ports open to the world.
+{% for rule in co_fw_allow_ports_public %}
+        {{ rule.proto }} dport {{ rule.port }} accept
+{% endfor %}
+{% endif %}
+
+{% if co_fw_allow_ports_restricted | length > 0 %}
+        # 5b. Operator-declared ports open to specific source CIDRs.
+{% for rule in co_fw_allow_ports_restricted %}
+        ip saddr {{ rule.cidr }} {{ rule.proto }} dport {{ rule.port }} accept
+{% endfor %}
+{% endif %}
+    }
+
+    chain forward {
+        # Not a router — nothing is forwarded.
+        type filter hook forward priority 0; policy drop;
+    }
+
+    chain output {
+        # Ingress baseline only; egress is unrestricted here.
+        type filter hook output priority 0; policy accept;
+    }
+}

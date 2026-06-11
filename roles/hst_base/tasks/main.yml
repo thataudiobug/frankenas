@@ -1,2 +1,36 @@
 ---
 # tasks file for hst_base
+#
+# Baseline for BAREMETAL hosts (e.g. the Proxmox node). Baremetal properties
+# are less predictable than guests — the box may run its own firewall
+# (pve-firewall), serve a management web UI (8006), and carry cluster/corosync
+# links — so the host firewall is OFF by default here and must be opted into
+# per host once its required ports are known. SSH hardening and unattended
+# security upgrades are universally safe and stay on.
+
+- name: Apply the common host security baseline
+  ansible.builtin.include_role:
+    name: co_hst_sec
+  vars:
+    # Baremetal: don't impose a default-drop firewall that could knock out
+    # the Proxmox web UI or cluster traffic. Turn on per host (host_vars)
+    # after declaring the needed co_fw_allow_ports_* entries.
+    co_fw_enabled: "{{ co_fw_enabled | default(false) }}"
+    # PVE may need root SSH by key for some tooling; prohibit-password keeps
+    # key login working while refusing passwords.
+    co_ssh_permit_root_login: "{{ co_ssh_permit_root_login | default('prohibit-password') }}"
+
+# Proxmox node hardening: enable the datacenter firewall master switch and
+# restrict the node's mgmt surfaces (web UI :8006, SSH, API) to OOB. The
+# in-guest co_hst_sec firewall above stays off on PVE (Proxmox enforces its
+# own), so this is where the node's WAN exposure is actually closed.
+- name: Harden the Proxmox node firewall
+  ansible.builtin.include_role:
+    name: es_hst_pve
+  when: "'hosts_baremetal' in group_names"
+
+# Fleet-wide log shipping. On the PVE node this also picks up the 'pve'
+# source profile (PVE task logs) if the host enables it in log_sources_enabled.
+- name: Ship logs to the central aggregator
+  ansible.builtin.include_role:
+    name: co_hst_log

@@ -1,0 +1,83 @@
+---
+# tasks file for dl_auth_srv
+#
+# Prepares config + storage for the Authelia + Redis stack on Orthax. The
+# containers are deployed separately by the `docker` role (catalog entries
+# authelia + redis, group `identity`). Sequence:
+#   1. preflight (storage bind present, secrets set, users defined)
+#   2. create config/redis dirs on the bind
+#   3. render configuration.yml (access control, session, redis, storage)
+#   4. render the YAML user database
+#   5. verify
+
+# -- 1. Preflight ------------------------------------------------------
+- name: Assert the config bind is available
+  ansible.builtin.assert:
+    that:
+      - auth_srv_config_root is defined
+      - (auth_srv_config_root | dirname) == '/mnt/config'
+    fail_msg: >-
+      Expected the config bind at /mnt/config. Ensure Orthax enables the
+      'config' droplet_bind and pve_dl applied it before this role runs.
+    quiet: true
+
+- name: Refuse to run with placeholder secrets
+  ansible.builtin.assert:
+    that:
+      - auth_srv_session_secret != "CHANGE_ME_VAULT"
+      - auth_srv_storage_encryption_key != "CHANGE_ME_VAULT"
+      - auth_srv_jwt_secret != "CHANGE_ME_VAULT"
+      - auth_srv_redis_password != "CHANGE_ME_VAULT"
+      - auth_srv_ldap_bind_password != "CHANGE_ME_VAULT"
+    fail_msg: >-
+      One or more Authelia secrets is still the placeholder. Set
+      auth_srv_session_secret, auth_srv_storage_encryption_key,
+      auth_srv_jwt_secret, auth_srv_redis_password and
+      auth_srv_ldap_bind_password from the vault.
+    quiet: true
+
+- name: Assert the storage encryption key is long enough
+  ansible.builtin.assert:
+    that:
+      - auth_srv_storage_encryption_key | length >= 20
+    fail_msg: "auth_srv_storage_encryption_key must be > 20 characters (Authelia requirement)."
+    quiet: true
+
+- name: Assert every access-control rule is well-formed
+  ansible.builtin.assert:
+    that:
+      - item.domain is defined
+      - item.policy | default('deny') in ['bypass', 'one_factor', 'two_factor', 'deny']
+    fail_msg: >-
+      Malformed authelia_access_catalog rule (needs domain + valid policy):
+      {{ item }}
+    quiet: true
+  loop: "{{ authelia_access_catalog }}"
+
+# -- 2. Storage dirs ---------------------------------------------------
+- name: Create Authelia / Redis directories on the config bind
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop: "{{ auth_srv_dirs }}"
+
+# -- 3. Authelia config ------------------------------------------------
+- name: Render the Authelia configuration
+  ansible.builtin.template:
+    src: configuration.yml.j2
+    dest: "{{ auth_srv_config_root }}/configuration.yml"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Recreate authelia container
+
+- name: Flush handlers so Authelia picks up new config before verify
+  ansible.builtin.meta: flush_handlers
+
+# -- 5. Verify ---------------------------------------------------------
+- name: Verify the auth server
+  ansible.builtin.include_tasks: verify.yml
+  when: auth_srv_verify | bool

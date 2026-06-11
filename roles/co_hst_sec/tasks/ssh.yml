@@ -1,0 +1,35 @@
+---
+# SSH hardening via a drop-in under /etc/ssh/sshd_config.d/.
+#
+# We never touch the stock /etc/ssh/sshd_config (Ubuntu 24.04 ships it with
+# `Include /etc/ssh/sshd_config.d/*.conf` near the top). A drop-in keeps our
+# changes isolated, idempotent, and trivially reversible (delete the file).
+#
+# The template is validated with `sshd -t -f %s` BEFORE the file is accepted,
+# and the service is only reloaded (not restarted) via a handler — a reload
+# re-reads config without dropping the existing connection that Ansible is
+# riding on, so a surprise lockout can't strand us mid-play.
+
+- name: Ensure sshd_config.d drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install hardened sshd drop-in (validated)
+  ansible.builtin.template:
+    src: sshd_hardening.conf.j2
+    dest: "/etc/ssh/sshd_config.d/{{ co_ssh_dropin_filename }}"
+    owner: root
+    group: root
+    mode: "0644"
+    # `sshd -t -f %s` parses the staged drop-in as a config file and exits
+    # non-zero on any syntax/keyword error, so a malformed directive fails
+    # the task and the bad file is never written. (sshd applies built-in
+    # defaults for unspecified options, so a directives-only drop-in is a
+    # valid standalone config to test.) A reload of the full effective
+    # config still happens via the handler after the file is in place.
+    validate: "sshd -t -f %s"
+  notify: Reload sshd

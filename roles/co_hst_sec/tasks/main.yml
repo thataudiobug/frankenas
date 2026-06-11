@@ -1,0 +1,39 @@
+---
+# tasks file for co_hst_sec
+#
+# Shared security baseline. Each concern lives in its own task file and is
+# gated by a master switch so a consuming role (or host_var) can disable any
+# piece independently. Order is deliberate:
+#   1. preflight  — fail fast before we touch anything that could lock us out
+#   2. ssh        — hardened drop-in, validated, reload via handler
+#   3. firewall   — nftables default-drop input (skipped on VPN kill-switch
+#                   hosts, which own /etc/nftables.conf themselves)
+#   4. upgrades   — unattended security patching
+
+- name: Preflight validation (don't lock ourselves out)
+  ansible.builtin.include_tasks: preflight.yml
+
+- name: Harden SSH
+  ansible.builtin.include_tasks: ssh.yml
+  when: co_ssh_harden_enabled | bool
+
+- name: Configure host firewall (nftables)
+  ansible.builtin.include_tasks: firewall.yml
+  when: co_fw_enabled | bool
+
+- name: Configure unattended security upgrades
+  ansible.builtin.include_tasks: upgrades.yml
+  when: co_uu_enabled | bool
+
+- name: Configure time synchronisation (chrony)
+  ansible.builtin.include_tasks: time.yml
+  when: co_chrony_enabled | bool
+
+# Flush handlers so any sshd reload / nftables reload lands before we verify.
+- name: Flush handlers before verification
+  ansible.builtin.meta: flush_handlers
+  when: co_verify | bool
+
+- name: Verify the applied security baseline
+  ansible.builtin.include_tasks: verify.yml
+  when: co_verify | bool

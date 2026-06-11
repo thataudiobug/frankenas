@@ -1,0 +1,66 @@
+---
+# Hypervisor-enforced firewall profiles, applied per-guest by the pve_fw
+# role (catalog -> enabled -> overrides). A host opts in with
+# `firewall_enabled: <key>` in its host_vars.
+#
+# Enforcement model (see roles/pve_fw/README.md):
+#   * Rules are compiled on the pve node and enforced on the guest's WAN
+#     veth BEFORE traffic reaches the guest — a compromised guest cannot
+#     edit them.
+#   * Only the WAN NIC is filtered (network_catalog sets firewall: 1 on wan,
+#     firewall: 0 on oob), so policy_in: DROP governs WAN ingress only and
+#     can never lock out OOB management (SSH/Ansible/API on 10.128.0.0/9).
+#   * pve_fw also auto-injects an SSH-from-mgmt ACCEPT as belt-and-suspenders.
+#
+# Rule keys: type (in|out|forward, default in), action (ACCEPT|DROP|REJECT),
+# source, dest, proto, dport, sport, iface, log, comment.
+
+firewall_catalog:  # pick one
+  # WAN-facing reverse proxy (e.g. the NPM host). Only HTTP/HTTPS from the
+  # WAN segment; everything else inbound is dropped. If/when you lock the
+  # origin to Cloudflare ranges, narrow `source` here to those CIDRs.
+  edge:
+    policy_in: DROP
+    policy_out: ACCEPT
+    rules:
+      - { type: in, action: ACCEPT, proto: tcp, dport: "80,443", comment: "HTTP(S) ingress" }
+
+  # Internal service guest: no public ingress at all. Reachable only over
+  # OOB management (unfiltered NIC) and whatever it initiates outbound.
+  internal:
+    policy_in: DROP
+    policy_out: ACCEPT
+    rules: []
+
+  # Docker app host behind the reverse proxy: accept app traffic only from
+  # the WAN service segment (10.0.0.0/9), not the whole internet. Adjust the
+  # ports to match what the proxy actually forwards.
+  app_behind_proxy:
+    policy_in: DROP
+    policy_out: ACCEPT
+    rules:
+      - { type: in, action: ACCEPT, source: "10.0.0.0/9", proto: tcp, dport: "8096,8080", comment: "app ports from WAN service net" }
+
+  # Central log server (Mollymauk). Loki (3100) and Grafana (3000) are
+  # reachable from the OOB management net ONLY — Loki is unauthenticated, so
+  # this firewall is load-bearing, not just defence in depth. No WAN ingress.
+  logserver:
+    policy_in: DROP
+    policy_out: ACCEPT
+    rules:
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 3100, comment: "Loki push/query (OOB only)" }
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 3000, comment: "Grafana UI (OOB only)" }
+
+  # Central identity stack (Orthax). Authelia (9091), Redis (6379), LLDAP
+  # LDAP (3890) + LLDAP web UI (17170) reachable from the OOB management net
+  # ONLY. The public Authelia login portal comes through NPM (which reaches
+  # Authelia over OOB), so no WAN ingress is needed. The directory and Redis
+  # must never be WAN-reachable.
+  identity:
+    policy_in: DROP
+    policy_out: ACCEPT
+    rules:
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 9091, comment: "Authelia portal/forward-auth (OOB only)" }
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 6379, comment: "Redis (OOB only)" }
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 3890, comment: "LLDAP LDAP (OOB only)" }
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 17170, comment: "LLDAP web UI (OOB only)" }

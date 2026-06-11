@@ -1,0 +1,14 @@
+# Configure the reverse-proxy (NPM) host: Authelia forward-auth snippets.
+#
+#   ansible-playbook plays/reverse_proxy_deploy.yml --limit port-royal
+#
+# Drops the reusable nginx snippets NPM can include. Per-proxy-host gating is
+# then enabled from NPM's Advanced config (see roles/es_svc_rp/README.md),
+# which keeps protection opt-in and reversible per service.
+---
+- name: Configure NPM Authelia forward-auth
+  hosts: reverse_proxy
+  gather_facts: true
+  become: true
+  roles:
+    - es_svc_rp

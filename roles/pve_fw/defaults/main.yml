@@ -1,0 +1,55 @@
+---
+# defaults file for pve_fw
+#
+# pve_fw applies HYPERVISOR-ENFORCED firewalling to a droplet by rendering
+# its Proxmox firewall file (/etc/pve/firewall/<vmid>.fw) on the pve node.
+# Because the rules live on the host and are enforced on the guest's veth
+# BEFORE traffic reaches it, root inside a compromised guest cannot flush or
+# edit them — the whole point of moving firewalling off the guest.
+#
+# Selection follows the repo's catalog -> enabled framework: a host opts in
+# with `firewall_enabled: <profile>` (host_var) naming an entry in
+# `firewall_catalog` (group_var). Hosts that don't set it are skipped.
+#
+# LOCKOUT MODEL (important):
+#   Proxmox firewalling is per-NIC (each netif has its own `firewall=` flag).
+#   The network_catalog enables it on the WAN NIC (firewall=1) and DISABLES
+#   it on the OOB management NIC (firewall=0). So the per-VM `policy_in DROP`
+#   only governs WAN ingress; SSH/Ansible/API over the OOB net
+#   ({{ '10.128.0.0/9' }}) is never filtered and cannot be locked out by a
+#   guest profile. The rules below are therefore about WAN exposure only.
+
+# -- Proxmox API / node connection (mirrors pve_dl) --------------------
+pve_fw_node: "pve"
+# NOTE: still the literal WAN management address, matching pve_dl. Once the
+# Proxmox API is rebound to the OOB anchor, change this to 10.128.0.1.
+pve_fw_api_host: "192.168.1.100"
+pve_fw_api_user: "robot@pam"
+pve_fw_api_token_id: "{{ api_catalog.pve_api.id }}"
+pve_fw_api_token_secret: "{{ api_catalog.pve_api.key }}"
+
+# -- Profile selection --------------------------------------------------
+# Host-var naming a firewall_catalog entry. Empty => role is a no-op.
+firewall_enabled: ""
+firewall_catalog: {}
+# Per-host tweaks merged over the selected profile (recursive), same shape
+# as the other *_overrides in the repo.
+firewall_overrides: {}
+
+# -- Management network (lockout safety net) ---------------------------
+# The OOB management CIDR. With the OOB NIC unfiltered (firewall=0) this is
+# already safe, but if an operator ever flips OOB to firewall=1, the
+# auto-injected SSH-from-mgmt rule below keeps Ansible reachable.
+pve_fw_mgmt_cidr: "10.128.0.0/9"
+pve_fw_inject_mgmt_ssh: true
+pve_fw_ssh_port: 22
+
+# -- Behaviour ----------------------------------------------------------
+# Verify the datacenter (cluster) firewall master switch is enabled. Guest
+# .fw rules do NOTHING until the cluster firewall is on (handled by the PVE
+# host workflow, es_hst_pve). When true we check and warn loudly if it's off
+# so a guest isn't left believing it's protected when it isn't.
+pve_fw_check_datacenter_enabled: true
+
+# Re-check the applied state at the end of the run.
+pve_fw_verify: true

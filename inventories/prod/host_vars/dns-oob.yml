@@ -28,3 +28,8 @@ network_enabled:
   wan:
   oob:
     ip: "10.128.0.2/9"
+
+# Log shipping: journald only (the always-on 'base' profile) — dnsmasq logs
+# DHCP/DNS activity to the journal, so no extra source profile is needed.
+# Listed explicitly for clarity; [] means base-only.
+log_sources_enabled: []

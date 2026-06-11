@@ -21,3 +21,8 @@ droplet_bind_enabled:
   config:
 dns_enabled: oob
 ovpn_server_enabled: ca_toronto
+
+# Log shipping: docker container logs (piracy stack). journald ships
+# automatically. Ships to Loki over OOB, which the VPN kill switch permits
+# (mgmt CIDR bypasses the tunnel), so no leak and no lost logs.
+log_sources_enabled: [docker]

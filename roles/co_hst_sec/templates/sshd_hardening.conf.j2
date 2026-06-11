@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+#
+# Hardened sshd drop-in for {{ inventory_hostname }} (managed by co_hst_sec).
+# Edit the role's defaults/host_vars, not this file — it is regenerated.
+#
+# Drop-ins are read in lexical order and the FIRST value for a keyword wins,
+# so this file (10-...) overrides anything set later by the distro.
+
+# --- Authentication -------------------------------------------------------
+PermitRootLogin {{ co_ssh_permit_root_login }}
+PasswordAuthentication {{ co_ssh_password_authentication }}
+KbdInteractiveAuthentication {{ co_ssh_kbd_interactive_authentication }}
+PubkeyAuthentication {{ co_ssh_pubkey_authentication }}
+PermitEmptyPasswords no
+
+# --- Brute-force / exposure reduction ------------------------------------
+MaxAuthTries {{ co_ssh_max_auth_tries }}
+LoginGraceTime {{ co_ssh_login_grace_time }}
+
+# --- Forwarding (off unless a host explicitly needs it) ------------------
+X11Forwarding {{ co_ssh_x11_forwarding }}
+AllowAgentForwarding {{ co_ssh_allow_agent_forwarding }}
+
+# --- Idle session reaping ------------------------------------------------
+ClientAliveInterval {{ co_ssh_client_alive_interval }}
+ClientAliveCountMax {{ co_ssh_client_alive_count_max }}

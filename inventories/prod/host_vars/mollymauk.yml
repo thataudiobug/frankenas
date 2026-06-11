@@ -1,0 +1,44 @@
+# mollymauk — central log-aggregation server (Loki + Grafana).
+#
+# Infrastructure box: every other host ships logs here, so it gets a STATIC
+# OOB anchor rather than a DHCP lease — the agents' co_log_loki_host points
+# at a stable address that exists before dnsmasq does. Next free anchor
+# after pve(.1) / dns(.2) / c2(.3) / identity-reserved(.4) is .5.
+#
+# OS on the small (s8) template — nothing writes to the OS disk after build;
+# all log data lands on the Nott 2TB mirror bind. Loki is unauthenticated,
+# so it is published on the OOB interface only and firewalled to OOB.
+ansible_host: mollymauk.oob.frankenas.lan
+
+os_enabled: "ubuntu"
+compute_enabled: "medium"        # Loki + Grafana; a touch more headroom
+storage_enabled: "s8"            # OS only; data is on the Nott bind
+dns_enabled: oob
+users_enabled: [casey, robot]
+
+network_enabled:
+  wan:        # apt + Grafana plugin downloads
+  oob:
+    ip: "10.128.0.5"             # static anchor; agents ship here
+
+# Storage: OS on s8, all Loki chunks/index on the Nott 2TB mirror bind,
+# small config on the config bind.
+droplet_bind_enabled:
+  nott:
+  config:
+
+# Deploy the Loki + Grafana stack here.
+docker_groups_enabled:
+  observability:
+
+# Hypervisor-enforced firewall: only the log/metrics ports, OOB-only.
+firewall_enabled: logserver
+
+# Don't ship the log server's own agent to itself before Loki is up. Its
+# container logs are still captured (docker -> journald) and can be added
+# later once the stack is healthy.
+co_log_enabled: false
+
+# Grafana admin password — OVERRIDE FROM VAULT. Placeholder here will make
+# dl_log_srv refuse to run until set.
+# log_srv_grafana_admin_password: "{{ vault_grafana_admin_password }}"

@@ -56,6 +56,11 @@ network_catalog:  # pick many
     bridge: "vmbr1"
     ip: dhcp
     gw: 192.168.1.254
+    # firewall: 1 turns on Proxmox firewalling for THIS NIC. The pve_fw role
+    # renders the guest's DROP-by-default ingress policy, enforced on the
+    # host side of this veth (a compromised guest can't bypass it). WAN
+    # ingress is the only thing filtered — see the oob NIC below.
+    firewall: 1
   oob:
     bridge: "vmbr0"
     # network: "10.128.0."    # octet prefix for 'host: <octet>' overrides
@@ -71,3 +76,8 @@ network_catalog:  # pick many
     # the default route belongs to the WAN NIC.
     oob: true
     ip: dhcp                 # CHANGED: lease by default; static ip/host overrides win
+    # firewall: 0 leaves this NIC UNFILTERED. This is the lockout safety
+    # net: management traffic (SSH/Ansible/Proxmox API over 10.128.0.0/9)
+    # bypasses the guest firewall entirely, so a bad pve_fw profile can
+    # never strand the box. Keep this 0.
+    firewall: 0

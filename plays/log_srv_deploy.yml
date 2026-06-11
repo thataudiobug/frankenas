@@ -1,0 +1,34 @@
+# Deploy the central log-aggregation server (Mollymauk): Loki + Grafana.
+#
+#   ansible-playbook plays/log_srv_deploy.yml --limit mollymauk
+#
+# Order matters:
+#   1. pve_dl       — build the LXC (s8 OS) and apply the nott/config binds
+#                     + the hypervisor firewall (logserver profile, OOB-only)
+#   2. dl_log_srv   — lay out storage on the Nott bind, render Loki/Grafana
+#                     config onto the config bind
+#   3. docker       — deploy the loki + grafana containers (observability)
+#
+# Run with the vault available so log_srv_grafana_admin_password resolves.
+---
+- name: Provision the log server container
+  hosts: log_srv
+  gather_facts: false
+  connection: local
+  roles:
+    - role: pve_dl
+      when: "'droplets' in group_names"
+
+- name: Configure Loki + Grafana storage and config
+  hosts: log_srv
+  gather_facts: true
+  become: true
+  roles:
+    - dl_log_srv
+
+- name: Deploy the observability containers
+  hosts: log_srv
+  gather_facts: true
+  become: true
+  roles:
+    - docker

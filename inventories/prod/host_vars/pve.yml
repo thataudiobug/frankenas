@@ -22,3 +22,8 @@ network_enabled:
     ip: "192.168.1.100"
   oob:
     ip: "10.128.0.1"
+
+# Log shipping: the Proxmox node ships its journald (pve-firewall, systemd,
+# kernel) plus PVE task logs (/var/log/pve/tasks). chrony also runs here
+# (baremetal owns its clock), keeping all its LXC guests' clocks correlated.
+log_sources_enabled: [pve]

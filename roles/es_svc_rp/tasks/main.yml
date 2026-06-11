@@ -1,2 +1,41 @@
 ---
 # tasks file for es_svc_rp
+#
+# Drops the Authelia forward-auth nginx snippets where NPM can include them.
+# Per-proxy-host gating is then opt-in from NPM's Advanced config (see the
+# README), which keeps protection reversible per service (break-glass).
+
+- name: Configure Authelia forward-auth snippets for NPM
+  when: rp_authelia_enabled | bool
+  block:
+    - name: Ensure the NPM custom snippet directory exists
+      ansible.builtin.file:
+        path: "{{ rp_npm_data_path }}/{{ rp_snippets_subdir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    # The auth-location snippet defines the internal /authelia subrequest
+    # endpoint that nginx's auth_request calls. Included once per server.
+    - name: Render the Authelia auth-location snippet
+      ansible.builtin.template:
+        src: authelia-authrequest.conf.j2
+        dest: "{{ rp_npm_data_path }}/{{ rp_snippets_subdir }}/authelia-authrequest.conf"
+        owner: root
+        group: root
+        mode: "0644"
+
+    # The location snippet is what each protected proxy host includes inside
+    # its location block to actually enforce auth + handle the redirect.
+    - name: Render the Authelia location snippet
+      ansible.builtin.template:
+        src: authelia-location.conf.j2
+        dest: "{{ rp_npm_data_path }}/{{ rp_snippets_subdir }}/authelia-location.conf"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Verify the reverse-proxy Authelia integration
+      ansible.builtin.include_tasks: verify.yml
+      when: rp_verify | bool

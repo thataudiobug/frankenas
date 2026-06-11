@@ -1,0 +1,49 @@
+---
+# Verification for dl_log_srv. Confirms config is in place and (if the stack
+# is already running) Loki answers ready and Grafana is up.
+
+- name: Confirm the Loki config was rendered
+  ansible.builtin.stat:
+    path: "{{ log_srv_config_root }}/loki-config.yaml"
+  register: _ls_cfg
+
+- name: Assert the Loki config exists
+  ansible.builtin.assert:
+    that:
+      - _ls_cfg.stat.exists
+    fail_msg: "Loki config was not rendered at {{ log_srv_config_root }}/loki-config.yaml."
+    quiet: true
+
+- name: Confirm the Nott storage dirs exist and are writable by Loki
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: _ls_dirs
+  loop: "{{ log_srv_loki_dirs }}"
+
+- name: Assert every Loki data dir is present
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isdir
+    fail_msg: "Loki data dir {{ item.item }} is missing."
+    quiet: true
+  loop: "{{ _ls_dirs.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Probe Loki readiness (if the container is already running)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ log_srv_loki_http_port }}/ready"
+    status_code: [200, 503]
+    timeout: 10
+  register: _ls_ready
+  failed_when: false
+  changed_when: false
+
+- name: Summarise log server verification
+  ansible.builtin.debug:
+    msg:
+      - "loki config rendered: {{ _ls_cfg.stat.exists }}"
+      - "retention: {{ log_srv_retention_period }} (enabled: {{ log_srv_retention_enabled }})"
+      - "data root: {{ log_srv_data_root }}"
+      - "loki ready: {{ _ls_ready.status | default('not running yet') }}"

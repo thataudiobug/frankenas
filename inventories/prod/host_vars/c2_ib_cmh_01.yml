@@ -25,3 +25,7 @@ network_enabled:
   wan:
   oob:
     ip: "10.128.0.3"
+
+# Log shipping: journald only (the always-on 'base' profile) — captures
+# Ansible runs, sshd, systemd. Listed explicitly for clarity; [] = base-only.
+log_sources_enabled: []

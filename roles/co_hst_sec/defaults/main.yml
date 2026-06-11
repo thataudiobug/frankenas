@@ -1,0 +1,182 @@
+---
+# defaults file for co_hst_sec
+#
+# co_hst_sec ("common host security") is the shared, universally-applicable
+# security baseline for every Linux host in the fleet — both droplets
+# (guests, via dl_base) and baremetal (via hst_base). It bundles three
+# concerns, each independently togglable so the less-predictable baremetal
+# side can opt out of anything that would fight Proxmox/cluster tooling:
+#
+#   1. SSH hardening      (co_ssh_*)   — key-only, no root password login
+#   2. Host firewall      (co_fw_*)    — nftables default-drop input
+#   3. Unattended upgrades (co_uu_*)   — security patches only, automatic
+#
+# Consuming roles (dl_base, hst_base) set the *posture* by overriding these
+# vars; this file holds the safe, conservative defaults.
+
+# =====================================================================
+# Master switches — flip a whole concern off without editing tasks.
+# =====================================================================
+co_ssh_harden_enabled: true
+co_uu_enabled: true
+
+# Time sync (chrony). Required for trustworthy cross-host log correlation.
+# Auto no-ops inside LXC guests (they can't set the clock — see tasks/time.yml);
+# the master switch just lets you disable the whole concern fleet-wide.
+co_chrony_enabled: true
+
+# The firewall is the one piece that can lock you out or collide with
+# another nftables owner, so it gets special treatment:
+#
+#   * It DEFERS to the dl_vpn_client kill switch automatically. That role
+#     owns /etc/nftables.conf and runs `flush ruleset`, so a second writer
+#     would clobber it (or be clobbered) depending on play order. Any host
+#     in the `vpn_clients` group therefore skips this baseline firewall and
+#     lets the (stricter, fail-closed) kill switch provide input filtering.
+#
+#   * It DEFERS to the Proxmox hypervisor firewall for droplets. Any host in
+#     the `pct` group has its ingress enforced on the host side of its veth
+#     by the pve_fw role (tamper-resistant — a compromised guest can't edit
+#     it), so the in-guest nftables baseline would be redundant. qemu guests
+#     get the same treatment once pve_fw covers them.
+#
+#   * dl_base still applies for non-pct guests; hst_base leaves it off by
+#     default because baremetal (Proxmox) ships its own firewall and a
+#     default-drop policy can knock out the web UI / cluster links.
+co_fw_enabled: "{{ 'vpn_clients' not in group_names and 'pct' not in group_names }}"
+
+# =====================================================================
+# Management network — MUST stay reachable through every layer.
+# =====================================================================
+#
+# This is the OOB management space the C2 box reaches hosts over for SSH /
+# Ansible. It is allowlisted in the firewall input chain BEFORE the drop
+# policy. An empty or wrong value will lock you out. Matches the kill
+# switch's vpn_mgmt_cidr (10.128.0.0/9 == 10.128.0.0–10.255.255.255).
+co_mgmt_cidr: "10.128.0.0/9"
+
+# Extra source CIDRs allowed to reach SSH (and the firewall's base allows),
+# e.g. a secondary admin/monitoring net. Usually empty.
+co_admin_extra_cidrs: []
+
+# =====================================================================
+# 1. SSH hardening
+# =====================================================================
+#
+# Written as a drop-in under /etc/ssh/sshd_config.d/ (Ubuntu 24.04 includes
+# that dir from the stock sshd_config) so we never rewrite the distro file.
+# The drop-in is validated with `sshd -t` before the service is reloaded —
+# a bad config that breaks sshd is the worst outcome here.
+co_ssh_dropin_filename: "10-frankenas-hardening.conf"
+
+# prohibit-password keeps key-based root login working (LXC guests log in
+# as root via authorized_key) while refusing password auth. Set to "no" on
+# hosts that have a real non-root admin user and never need root SSH.
+co_ssh_permit_root_login: "prohibit-password"
+
+# Key-only auth. The whole fleet is provisioned with keys (bootstrap.key +
+# users_catalog), so passwords are pure attack surface.
+co_ssh_password_authentication: "no"
+co_ssh_kbd_interactive_authentication: "no"
+co_ssh_pubkey_authentication: "yes"
+
+# Misc hardening knobs. Conservative, override per host if needed.
+co_ssh_max_auth_tries: 3
+co_ssh_login_grace_time: 30
+co_ssh_x11_forwarding: "no"
+co_ssh_allow_agent_forwarding: "no"
+co_ssh_client_alive_interval: 300
+co_ssh_client_alive_count_max: 2
+
+# Service to reload after a validated config change. Debian/Ubuntu use
+# "ssh"; some distros use "sshd".
+co_ssh_service_name: "ssh"
+
+# =====================================================================
+# 2. Host firewall (nftables)
+# =====================================================================
+#
+# A default-drop input policy with a small, explicit allowlist. Loaded
+# atomically via `nft -f` (validated first with `nft -c`) so there's no
+# unprotected window, same approach as the kill switch.
+co_fw_conf_path: "/etc/nftables.conf"
+
+# Allow ICMP/ICMPv6 from the management network for diagnostics (ping,
+# path MTU). Set false to drop even that.
+co_fw_allow_icmp_from_mgmt: true
+
+# Service ports to open to the WORLD (0.0.0.0/0 and ::/0). Keep this tight —
+# anything here is WAN-reachable if the host has a public path. Each entry:
+#   { proto: tcp|udp, port: <int or "n-m" range> }
+# Example (a reverse proxy box):
+#   co_fw_allow_ports_public:
+#     - { proto: tcp, port: 80 }
+#     - { proto: tcp, port: 443 }
+co_fw_allow_ports_public: []
+
+# Service ports to open only to specific source CIDRs. Each entry:
+#   { proto: tcp|udp, port: <int/range>, cidr: <CIDR> }
+# Example (expose a metrics endpoint to the mgmt net only):
+#   co_fw_allow_ports_restricted:
+#     - { proto: tcp, port: 9100, cidr: "10.128.0.0/9" }
+co_fw_allow_ports_restricted: []
+
+# SSH (22) from the management net is ALWAYS allowed and is added
+# automatically — do not list it above. Set this false only if you serve
+# SSH on a non-standard port (then add it to co_fw_allow_ports_restricted).
+co_fw_allow_ssh_from_mgmt: true
+co_fw_ssh_port: 22
+
+# Enable + start the nftables service (so the ruleset reloads on boot).
+co_fw_manage_service: true
+
+# =====================================================================
+# 3. Unattended (security) upgrades
+# =====================================================================
+#
+# Configures apt's unattended-upgrades to apply SECURITY updates only,
+# automatically, on a timer. This is intentionally narrower than dl_base's
+# blanket `apt name=* state=latest` (which is operator-driven and can pull
+# breaking feature updates mid-converge). Security-only auto-patching closes
+# the window between a CVE fix landing and the next manual run.
+co_uu_origins:
+  - "${distro_id}:${distro_codename}-security"
+  - "${distro_id}ESMApps:${distro_codename}-apps-security"
+  - "${distro_id}ESM:${distro_codename}-infra-security"
+
+# Auto-reboot when a patch needs it (e.g. kernel). Off by default so a host
+# never disappears unexpectedly; turn on per-host with a sane reboot time.
+co_uu_automatic_reboot: false
+co_uu_automatic_reboot_time: "03:30"
+
+# Remove unused dependencies/kernels after upgrades to keep /boot from
+# filling (a classic silent failure on small guests).
+co_uu_remove_unused_dependencies: true
+
+# How often (in days) the apt periodic timer runs the update/upgrade steps.
+co_uu_update_package_lists: 1
+co_uu_unattended_upgrade_interval: 1
+
+# =====================================================================
+# 4. Time synchronisation (chrony)
+# =====================================================================
+#
+# Only applied on hosts that own their clock (baremetal + qemu); LXC guests
+# inherit the PVE host clock and skip it automatically.
+co_chrony_service_name: "chrony"
+
+# NTP sources. Default to the NIST/Cloudflare-ish public pools; point these
+# at an internal time source if you add one later. Each entry:
+#   { address: <host>, pool: true|false }
+co_chrony_servers:
+  - { address: "time.cloudflare.com", pool: false }
+  - { address: "pool.ntp.org", pool: true }
+
+# =====================================================================
+# Verification
+# =====================================================================
+#
+# When true, the role re-checks the applied state at the end of the run
+# (and can be invoked stand-alone). Off by default to keep converges fast;
+# turn on in CI or after changes.
+co_verify: false

@@ -176,3 +176,11 @@
     port: 22
     timeout: 30
   delegate_to: localhost
+
+# Hypervisor-enforced firewall. Runs after the container exists (was_built.vmid
+# is in scope) so pve_fw can render /etc/pve/firewall/<vmid>.fw on the node.
+# No-op for guests that don't set firewall_enabled. Ingress is enforced on the
+# host side of the veth, so it doesn't matter that the guest is already up.
+- name: Apply hypervisor-enforced guest firewall
+  ansible.builtin.include_role:
+    name: pve_fw

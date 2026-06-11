@@ -1,0 +1,50 @@
+---
+# Verification for co_hst_log. Confirms the agent is running and can reach
+# the central Loki over OOB. Read-only.
+
+- name: Check the Alloy service is active
+  ansible.builtin.command:
+    cmd: "systemctl is-active {{ co_log_alloy_service_name }}"
+  register: _log_active
+  changed_when: false
+  failed_when: false
+
+- name: Assert Alloy is running
+  ansible.builtin.assert:
+    that:
+      - _log_active.stdout | trim == "active"
+    fail_msg: "Alloy is not active (got '{{ _log_active.stdout | trim }}'). Check `journalctl -u {{ co_log_alloy_service_name }}`."
+    quiet: true
+
+# Loki's readiness endpoint returns 200 when it can accept pushes. Probing
+# it from the shipping host confirms the OOB path works end to end (and that
+# we're not about to silently drop logs into a black hole).
+- name: Probe the central Loki readiness endpoint over OOB
+  ansible.builtin.uri:
+    url: "http://{{ co_log_loki_host }}:{{ co_log_loki_port }}/ready"
+    method: GET
+    status_code: [200, 503]   # 503 = up but not ready yet (still starting)
+    timeout: 10
+  register: _log_loki_ready
+  failed_when: false
+  changed_when: false
+
+- name: Warn if Loki is not reachable from this host
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: {{ inventory_hostname }} could not reach Loki at
+      {{ co_log_loki_host }}:{{ co_log_loki_port }} over OOB
+      (status: {{ _log_loki_ready.status | default('no response') }}). Logs
+      will buffer/drop until the path is up. Check the server and the OOB
+      firewall rule for :3100.
+  when: _log_loki_ready.status | default(0) not in [200, 503]
+
+- name: Summarise logging agent verification
+  ansible.builtin.debug:
+    msg:
+      - "host: {{ inventory_hostname }}"
+      - "alloy active: {{ _log_active.stdout | trim == 'active' }}"
+      - "journal shipping: {{ _log_journal | default(false) }}"
+      - "docker shipping: {{ _log_docker | default(false) }}"
+      - "file targets: {{ _log_files | default([]) | length }}"
+      - "loki reachable: {{ _log_loki_ready.status | default(0) in [200, 503] }}"

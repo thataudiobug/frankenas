@@ -12,3 +12,6 @@ dns_enabled: oob
 ovpn_server_enabled: ca_toronto
 docker_groups_enabled:
   piracy:
+
+# Log shipping: docker container logs (piracy stack) + journald.
+log_sources_enabled: [docker]

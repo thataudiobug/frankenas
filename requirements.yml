@@ -4,3 +4,7 @@ collections:
   - name: community.general
   - name: ansible.posix
   - name: ansible.utils
+  # Used by pve_dl (proxmox, proxmox_vm_info) and pve_fw (proxmox_firewall,
+  # proxmox_vm_info). Was previously relied on implicitly; pinned here so the
+  # hypervisor-enforced firewall modules resolve.
+  - name: community.proxmox

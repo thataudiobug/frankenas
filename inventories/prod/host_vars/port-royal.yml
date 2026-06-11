@@ -14,4 +14,8 @@ network_enabled:
 os_enabled: "ubuntu"
 users_enabled: [casey, robot]
 
+# Log shipping: docker container logs + NPM proxy logs (this host runs the
+# `public` group, which includes npm). journald ships automatically.
+log_sources_enabled: [docker, npm]
+
 docker_containers_overrides:
