@@ -10,7 +10,7 @@
       }}
   loop: >-
     {{
-      docker_groups_enabled.keys() | list |
+      (docker_groups_enabled | default({}, true)).keys() | list |
       map('extract', docker_groups_catalog) |
       map('dict2items') |
       map('map', attribute='key') |
@@ -19,7 +19,7 @@
     }}
   when:
     - docker_groups_enabled is defined
-    - docker_groups_enabled | length > 0
+    - docker_groups_enabled | default({}, true) | length > 0
     - docker_groups_catalog is defined
 
 - name: Merge group-based and directly-enabled containers
@@ -27,7 +27,7 @@
     docker_enabled_all: >-
       {{
         docker_enabled_from_groups |
-        combine(docker_containers_enabled | default({}))
+        combine(docker_containers_enabled | default({}, true))
       }}
 
 - name: Initialize docker_containers_deploy
@@ -40,8 +40,8 @@
       {{
         docker_containers_deploy | combine({
           item.key: docker_containers_catalog[item.key] | default({}) |
-                    combine(item.value | default({}), recursive=True) |
-                    combine(docker_containers_overrides[item.key] | default({}), recursive=True)
+                    combine(item.value | default({}, true), recursive=True) |
+                    combine((docker_containers_overrides | default({}, true))[item.key] | default({}), recursive=True)
         })
       }}
   loop: "{{ docker_enabled_all | dict2items }}"
