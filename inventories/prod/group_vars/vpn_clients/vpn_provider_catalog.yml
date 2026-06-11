@@ -20,13 +20,17 @@
 
 vpn_provider_catalog:  # pick one
   ca_toronto:
-    # 'custom' = bring-your-own OpenVPN config. gluetun also needs the .ovpn
-    # for a custom provider: drop it at <config bind>/gluetun/custom.ovpn and
-    # gluetun auto-loads it, or set OPENVPN_CUSTOM_CONFIG to its path.
+    # 'custom' = bring-your-own OpenVPN config. gluetun needs the .ovpn for a
+    # custom provider; pve_dl writes `custom_ovpn` to <config bind>/gluetun/
+    # custom.ovpn at build time, where gluetun auto-loads it.
     VPN_SERVICE_PROVIDER: "custom"
     VPN_TYPE: "openvpn"
     OPENVPN_USER: "{{ vault_ca_toronto_user }}"
     OPENVPN_PASSWORD: "{{ vault_ca_toronto_pass }}"
+    OPENVPN_CUSTOM_CONFIG: "/gluetun/custom.ovpn"
+    # Full .ovpn text (vault). Consumed by pve_dl's config-write task, NOT
+    # passed to gluetun as env — it's stripped out before the env merge.
+    custom_ovpn: "{{ vault_ca_toronto_ovpn }}"
 
   # Example of a built-in provider (no .ovpn needed — gluetun ships the
   # server list). Uncomment + add vault creds to use:
