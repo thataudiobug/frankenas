@@ -1,3 +1,12 @@
+- name: Create declared docker networks
+  community.docker.docker_network:
+    name: "{{ item.key }}"
+    driver: "{{ item.value.driver | default('bridge') }}"
+    state: present
+  loop: "{{ (docker_networks | default({}, true)) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
 - name: Initialize docker_enabled_from_groups
   set_fact:
     docker_enabled_from_groups: {}
@@ -49,7 +58,7 @@
     label: "{{ item.key }}"
   when: docker_enabled_all is defined and docker_enabled_all | length > 0
 
-- name: Deploy Docker containers
+- name: Deploy Docker containers (independent — sidecars first)
   community.docker.docker_container:
     name: "{{ item.key }}"
     image: "{{ item.value.image }}"
@@ -58,9 +67,50 @@
     ports: "{{ item.value.ports | default([]) }}"
     volumes: "{{ item.value.volumes | default([]) }}"
     env: "{{ item.value.env | default({}) }}"
-    networks: "{{ item.value.networks | default([]) }}"
+    network_mode: "{{ item.value.network_mode | default(omit) }}"
+    networks: "{{ item.value.networks if (item.value.networks is defined and item.value.network_mode is not defined) else omit }}"
+    capabilities: "{{ item.value.capabilities | default(omit) }}"
+    devices: "{{ item.value.devices | default(omit) }}"
+    sysctls: "{{ item.value.sysctls | default(omit) }}"
     command: "{{ item.value.command | default(omit) }}"
     labels: "{{ item.value.labels | default({}) }}"
     recreate: "{{ item.value.recreate | default(false) }}"
     pull: "{{ item.value.pull | default(false) }}"
-  loop: "{{ lookup('ansible.builtin.dict', docker_containers_deploy) }}"
+  # Pass 1: containers that do NOT join another container's netns. This
+  # includes the gluetun sidecar itself, so it exists before pass 2.
+  loop: >-
+    {{
+      docker_containers_deploy | dict2items
+      | rejectattr('value.network_mode', 'defined')
+      | list
+    }}
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Deploy Docker containers (netns-dependent — after their sidecar)
+  community.docker.docker_container:
+    name: "{{ item.key }}"
+    image: "{{ item.value.image }}"
+    state: "{{ item.value.state | default('started') }}"
+    restart_policy: "{{ item.value.restart_policy | default(restart_policy) }}"
+    # network_mode containers must NOT declare ports/networks — the
+    # netns owner (e.g. gluetun) publishes them instead.
+    env: "{{ item.value.env | default({}) }}"
+    network_mode: "{{ item.value.network_mode }}"
+    volumes: "{{ item.value.volumes | default([]) }}"
+    capabilities: "{{ item.value.capabilities | default(omit) }}"
+    devices: "{{ item.value.devices | default(omit) }}"
+    command: "{{ item.value.command | default(omit) }}"
+    labels: "{{ item.value.labels | default({}) }}"
+    recreate: "{{ item.value.recreate | default(false) }}"
+    pull: "{{ item.value.pull | default(false) }}"
+  # Pass 2: containers that share another container's netns
+  # (network_mode: "service:<x>"). Run after pass 1 so the owner exists.
+  loop: >-
+    {{
+      docker_containers_deploy | dict2items
+      | selectattr('value.network_mode', 'defined')
+      | list
+    }}
+  loop_control:
+    label: "{{ item.key }} (via {{ item.value.network_mode }})"
