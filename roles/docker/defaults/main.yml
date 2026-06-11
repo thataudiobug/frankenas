@@ -24,3 +24,11 @@ slow_storage: /mnt/nott
 big_storage: /mnt/essek
 backup_storage: /mnt/yasha
 fast_storage: /mnt/caleb
+
+# -- Alloy log-agent integration --------------------------------------
+# Where the Alloy agent (installed by co_hst_log) loads its config dir from,
+# and the service user to grant docker-socket access. Kept in sync with
+# co_hst_log's co_log_alloy_config_dir / service user. The wire_log_agent
+# task is a no-op if this directory doesn't exist (Alloy not installed).
+docker_alloy_config_dir: "/etc/alloy/config.d"
+docker_alloy_user: "alloy"
