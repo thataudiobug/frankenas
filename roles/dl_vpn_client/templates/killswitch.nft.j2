@@ -43,8 +43,26 @@ table inet killswitch {
     }
 
     chain forward {
-        # This is a client, not a router. Nothing is forwarded.
+        # This is a client, not a router — by default nothing is forwarded
+        # (containers get no WAN egress; that stays killed with the tunnel).
         type filter hook forward priority 0; policy drop;
+
+        # EXCEPTION: Docker published ports are DNAT'd to the container's
+        # bridge IP, so that traffic is *forwarded* (host -> docker bridge),
+        # not delivered to `input`. To reach a container's web GUI from the
+        # OOB management net we must allow that forward path explicitly —
+        # the input-chain mgmt allow does NOT cover forwarded packets.
+        #
+        # Scoped to mgmt-sourced traffic only, so this opens GUIs to the OOB
+        # net WITHOUT giving containers any WAN egress: container-originated
+        # forward traffic has the container IP as saddr (not the mgmt CIDR),
+        # so it still hits the drop policy. No leak.
+        ct state established,related accept
+        ct state invalid drop
+        ip saddr {{ vpn_mgmt_cidr }} accept
+{% for cidr in vpn_local_allow_cidrs %}
+        ip saddr {{ cidr }} accept
+{% endfor %}
     }
 
     chain output {
