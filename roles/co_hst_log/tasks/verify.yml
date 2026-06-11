@@ -45,6 +45,6 @@
       - "host: {{ inventory_hostname }}"
       - "alloy active: {{ _log_active.stdout | trim == 'active' }}"
       - "journal shipping: {{ _log_journal | default(false) }}"
-      - "docker shipping: {{ _log_docker | default(false) }}"
       - "file targets: {{ _log_files | default([]) | length }}"
+      - "docker shipping: contributed by the docker role if present (see {{ co_log_alloy_config_dir }}/30-docker.alloy)"
       - "loki reachable: {{ _log_loki_ready.status | default(0) in [200, 503] }}"
