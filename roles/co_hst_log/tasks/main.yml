@@ -37,7 +37,6 @@
     - name: Flatten the merged source flags
       ansible.builtin.set_fact:
         _log_journal: "{{ _log_sources | selectattr('journal', 'defined') | map(attribute='journal') | select | list | length > 0 }}"
-        _log_docker: "{{ _log_sources | selectattr('docker', 'defined') | map(attribute='docker') | select | list | length > 0 }}"
         _log_files: >-
           {{
             (_log_sources | selectattr('files', 'defined') | map(attribute='files') | list | flatten)
@@ -84,16 +83,16 @@
     # -- 3. Configure --------------------------------------------------
     - name: Ensure the Alloy config directory exists
       ansible.builtin.file:
-        path: "{{ co_log_alloy_config_path | dirname }}"
+        path: "{{ co_log_alloy_config_dir }}"
         state: directory
         owner: root
         group: root
         mode: "0755"
 
-    - name: Render the Alloy configuration
+    - name: Render the Alloy base configuration (sink + journald + files)
       ansible.builtin.template:
         src: config.alloy.j2
-        dest: "{{ co_log_alloy_config_path }}"
+        dest: "{{ co_log_alloy_base_config }}"
         owner: root
         group: root
         mode: "0644"
@@ -104,16 +103,19 @@
         validate: "alloy fmt %s"
       notify: Restart alloy
 
-    # Alloy needs read access to the docker socket to discover container
-    # logs. Add its service user to the docker group where docker shipping
-    # is enabled.
-    - name: Allow Alloy to read the docker socket (docker hosts)
-      ansible.builtin.user:
-        name: alloy
-        groups: docker
-        append: true
+    # Point Alloy's service at the config DIRECTORY (merges all *.alloy
+    # files) rather than the default single file, so other roles (the docker
+    # role) can contribute source snippets. CONFIG_FILE accepts a directory.
+    - name: Point Alloy at the config directory
+      ansible.builtin.lineinfile:
+        path: "{{ co_log_alloy_env_file }}"
+        regexp: '^CONFIG_FILE='
+        line: 'CONFIG_FILE="{{ co_log_alloy_config_dir }}"'
+        create: true
+        owner: root
+        group: root
+        mode: "0644"
       notify: Restart alloy
-      when: _log_docker | bool
 
     - name: Enable and start Alloy
       ansible.builtin.systemd:
