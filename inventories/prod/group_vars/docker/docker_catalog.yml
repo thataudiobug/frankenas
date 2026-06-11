@@ -138,7 +138,10 @@ docker_containers_catalog:  # pick many
           'FIREWALL_OUTBOUND_SUBNETS': vpn_outbound_subnets | default('10.128.0.0/9'),
           'TZ': 'america/detroit'
         }
-        | combine(vpn_provider_catalog[vpn_provider_enabled] | default({}, true))
+        | combine(
+            (vpn_provider_catalog[vpn_provider_enabled] | default({}, true))
+            | dict2items | rejectattr('key', 'eq', 'custom_ovpn') | items2dict
+          )
       }}
     restart_policy: "unless-stopped"
 
