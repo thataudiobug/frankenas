@@ -214,20 +214,27 @@
   delegate_to: pve
   connection: ssh
   block:
+    # Ownership note: this is an UNPRIVILEGED LXC, so the guest's uid/gid 0
+    # (root, which gluetun runs as) maps to 100000:100000 on the PVE host.
+    # Files written as PVE-root (0:0) appear as `nobody` inside the guest and
+    # gluetun can't read its own config -> tunnel fails -> "gluetun
+    # unhealthy". Owning these as 100000:100000 on PVE makes them root-owned
+    # (0:0) inside the container. Same +100000 offset the tun-device chown
+    # and GPU render-node mapping already use above.
     - name: Ensure the gluetun config dir exists on the bind source
       ansible.builtin.file:
         path: "{{ droplet_bind_catalog.config.src }}/gluetun"
         state: directory
-        owner: root
-        group: root
+        owner: "100000"
+        group: "100000"
         mode: "0750"
 
     - name: Write the custom.ovpn file
       ansible.builtin.copy:
         content: "{{ _gluetun_custom_ovpn }}"
         dest: "{{ droplet_bind_catalog.config.src }}/gluetun/custom.ovpn"
-        owner: root
-        group: root
+        owner: "100000"
+        group: "100000"
         mode: "0600"
       no_log: true   # vault-sourced .ovpn content
 
