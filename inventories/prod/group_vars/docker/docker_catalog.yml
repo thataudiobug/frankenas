@@ -152,6 +152,7 @@ docker_containers_catalog:  # pick many
     # gluetun publishes them (see above). If gluetun's tunnel drops, qbit
     # has no path out: fail-closed, same guarantee as the old kill switch.
     network_mode: "service:gluetun"
+    ports:
     volumes:
       - '{{ droplet_bind_catalog.config.mnt  }}/qbittorrent:/config'
       - '{{ droplet_bind_catalog.media.mnt  }}/downloads:/downloads'

@@ -1,0 +1,6 @@
+- name: Provision Droplets
+  hosts: droplets
+  gather_facts: true
+  connection: local
+  roles:
+    - role: pve_dl
