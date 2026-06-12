@@ -1,0 +1,97 @@
+# {{ ansible_managed }}
+#
+# Piracy stack for {{ inventory_hostname }}, managed by the docker role
+# (compose_catalog -> piracy). Edit the template / compose_catalog, not the
+# rendered file.
+#
+# Topology:
+#   * gluetun       — VPN sidecar, builds the tunnel, owns the netns that
+#                     qbittorrent shares. Has a healthcheck; qbittorrent
+#                     waits for it to be healthy before starting.
+#   * qbittorrent   — network_mode: "service:gluetun" -> ALL its traffic
+#                     (incl. the web UI) rides gluetun's netns. Fail-closed:
+#                     if gluetun's tunnel drops, qbit has no path out.
+#   * arr apps      — normal bridge net; reach qbit's API at gluetun's
+#                     published port (since qbit shares gluetun's netns).
+#
+# Secrets / host values come from the rendered .env (compose interpolates
+# ${VARS}); they never sit in this file.
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "8080:8080"            # qbittorrent web UI (via gluetun netns)
+      - "6881:6881"            # torrent TCP
+      - "6881:6881/udp"        # torrent UDP
+    volumes:
+      - "{{ droplet_bind_catalog.config.mnt }}/gluetun:/gluetun"
+    environment:
+      VPN_SERVICE_PROVIDER: "${VPN_SERVICE_PROVIDER}"
+      VPN_TYPE: "${VPN_TYPE}"
+      OPENVPN_USER: "${OPENVPN_USER}"
+      OPENVPN_PASSWORD: "${OPENVPN_PASSWORD}"
+      OPENVPN_CUSTOM_CONFIG: "${OPENVPN_CUSTOM_CONFIG}"
+      FIREWALL: "on"
+      FIREWALL_OUTBOUND_SUBNETS: "${FIREWALL_OUTBOUND_SUBNETS}"
+      TZ: "${TZ}"
+    restart: unless-stopped
+    healthcheck:
+      # gluetun's own health endpoint flips healthy only once the tunnel is
+      # up, so depends_on: service_healthy gates qbit correctly.
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  qbittorrent:
+    image: linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    # Share gluetun's network namespace — this is the whole point. No ports
+    # here (gluetun publishes them); no networks (can't combine with
+    # network_mode). depends_on healthy means qbit never starts before the
+    # tunnel is up, so there's no startup leak window.
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - "{{ droplet_bind_catalog.config.mnt }}/qbittorrent:/config"
+      - "{{ droplet_bind_catalog.media.mnt }}/downloads:/downloads"
+    environment:
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TZ}"
+      WEBUI_PORT: "8080"
+      TORRENTING_PORT: "6881"
+    restart: unless-stopped
+
+{% for app in piracy_arr_apps %}
+  {{ app.name }}:
+    image: {{ app.image }}
+    container_name: {{ app.name }}
+    networks:
+      - arr
+    ports:
+      - "{{ app.port }}:{{ app.port }}"
+    volumes:
+      - "{{ droplet_bind_catalog.config.mnt }}/{{ app.name }}:/config"
+{% for v in app.extra_volumes | default([]) %}
+      - "{{ v }}"
+{% endfor %}
+    environment:
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TZ}"
+    restart: unless-stopped
+{% endfor %}
+
+networks:
+  arr:
+    driver: bridge

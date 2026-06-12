@@ -1,0 +1,35 @@
+---
+# Deploy Docker Compose STACKS selected via compose_enabled (catalog ->
+# enabled). Each stack is rendered from a template + optional env file into
+# its own project directory, then brought up with `docker compose up -d`.
+#
+# This complements deploy_containers.yml (single containers): multi-container
+# topologies with shared netns / depends_on / healthchecks live here, where
+# compose handles them natively instead of the per-container loop.
+
+- name: Resolve enabled compose stacks
+  ansible.builtin.set_fact:
+    _compose_stacks: >-
+      {{
+        (compose_enabled | default([], true))
+        | map('extract', compose_catalog | default({}, true))
+        | list
+      }}
+  when: compose_enabled | default([], true) | length > 0
+
+- name: Validate every enabled stack exists in the catalog
+  ansible.builtin.assert:
+    that:
+      - item in (compose_catalog | default({}, true))
+    fail_msg: >-
+      Enabled compose stack '{{ item }}' is not in compose_catalog.
+      Available: {{ (compose_catalog | default({}, true)).keys() | list }}
+    quiet: true
+  loop: "{{ compose_enabled | default([], true) }}"
+
+- name: Deploy each enabled compose stack
+  ansible.builtin.include_tasks: deploy_compose_stack.yml
+  loop: "{{ compose_enabled | default([], true) }}"
+  loop_control:
+    loop_var: stack_key
+    label: "{{ stack_key }}"

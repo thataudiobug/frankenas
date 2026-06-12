@@ -16,6 +16,9 @@
 - name: Deploy Containers
   import_tasks: deploy_containers.yml
 
+- name: Deploy Compose Stacks
+  import_tasks: deploy_compose.yml
+
 # Wire Docker container logs into the Alloy agent (if present). Owned here,
 # not in co_hst_log, so docker concerns don't leak onto non-docker hosts.
 - name: Wire Docker logs into the Alloy log agent

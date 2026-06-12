@@ -1,8 +1,11 @@
 ansible_host: port-tortuga.oob.frankenas.lan   # was 192.168.1.104
 os_enabled: "ubuntu"
 
-docker_groups_enabled:
-  piracy:
+# Piracy stack now deploys as a docker COMPOSE stack (gluetun + qbittorrent
+# share a netns, arr apps on a bridge) — see compose_catalog. This replaces
+# the old per-container docker_groups_enabled: piracy.
+compose_enabled:
+  - piracy
 
 docker_containers_overrides:
 

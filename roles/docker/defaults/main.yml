@@ -32,3 +32,11 @@ fast_storage: /mnt/caleb
 # task is a no-op if this directory doesn't exist (Alloy not installed).
 docker_alloy_config_dir: "/etc/alloy/config.d"
 docker_alloy_user: "alloy"
+
+# -- Compose stacks ----------------------------------------------------
+# Root dir under which each compose stack gets its own project directory
+# (rendered compose.yml + .env). compose_enabled (host_var) selects stacks
+# from compose_catalog.
+docker_compose_root: "/opt/compose"
+# Image pull policy for `docker compose up` (missing|always|never|build).
+compose_pull_policy: "missing"

@@ -106,63 +106,6 @@ docker_containers_catalog:  # pick many
       PGID: "1000"
       TZ: "america/detroit"
 
-  # -- VPN sidecar (gluetun) -------------------------------------------
-  # gluetun builds the VPN tunnel INSIDE this container and other containers
-  # route through it via network_mode: "service:gluetun". Replaces the old
-  # host-level OpenVPN + nftables kill switch (dl_vpn_client) — gluetun has a
-  # built-in kill switch (FIREWALL=on) so a tunnel drop fails closed without
-  # any host firewall. Needs /dev/net/tun + NET_ADMIN (so the host LXC must
-  # set pct_needs_tun: true). It PUBLISHES the ports of every container that
-  # shares its netns — so qbittorrent's web UI + torrent ports live here.
-  #
-  # Provider/credentials follow the catalog -> enabled pattern: the host sets
-  # vpn_provider_enabled: <key> (a vpn_provider_catalog entry in
-  # group_vars/vpn_clients), and that entry's gluetun env is merged over the
-  # base env below. TUI-manageable; no loose gluetun_* host_vars.
-  gluetun:
-    image: "qmcgaw/gluetun:latest"
-    capabilities:
-      - "NET_ADMIN"
-    devices:
-      - "/dev/net/tun:/dev/net/tun"
-    ports:
-      - "8080:8080"            # qbittorrent web UI (routed via gluetun)
-      - "6881:6881"            # qbittorrent torrent TCP
-      - "6881:6881/udp"        # qbittorrent torrent UDP
-    volumes:
-      - '{{ droplet_bind_catalog.config.mnt }}/gluetun:/gluetun'
-    env: >-
-      {{
-        {
-          'FIREWALL': 'on',
-          'FIREWALL_OUTBOUND_SUBNETS': vpn_outbound_subnets | default('10.128.0.0/9'),
-          'TZ': 'america/detroit'
-        }
-        | combine(
-            (vpn_provider_catalog[vpn_provider_enabled] | default({}, true))
-            | dict2items | rejectattr('key', 'eq', 'custom_ovpn') | items2dict
-          )
-      }}
-    restart_policy: "unless-stopped"
-
-  qbittorrent:
-    image: "linuxserver/qbittorrent:latest"
-    # Route ALL traffic through the gluetun sidecar (shares its netns). With
-    # network_mode set, this container publishes NO ports of its own —
-    # gluetun publishes them (see above). If gluetun's tunnel drops, qbit
-    # has no path out: fail-closed, same guarantee as the old kill switch.
-    network_mode: "service:gluetun"
-    ports:
-    volumes:
-      - '{{ droplet_bind_catalog.config.mnt  }}/qbittorrent:/config'
-      - '{{ droplet_bind_catalog.media.mnt  }}/downloads:/downloads'
-    env:
-      PUID: "1000"
-      PGID: "1000"
-      TZ: "america/detroit"
-      WEBGUI_PORT: "8080"
-      TORRENTING_PORT: "6881"
-
   # -- Observability stack (deployed to Mollymauk) ---------------------
   # Loki: central log store. Unauthenticated by design, so it is published
   # ONLY on the OOB interface (10.128.0.0/9) — never 0.0.0.0. The config is
@@ -247,14 +190,6 @@ docker_containers_catalog:  # pick many
 
 
 docker_groups_catalog:  # pick many
-  piracy:
-    gluetun:
-    radarr:
-    lidarr:
-    sonarr:
-    prowlarr:
-    qbittorrent:
-
   proxys:
     npm:
 

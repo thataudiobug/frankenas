@@ -1,0 +1,54 @@
+---
+# Docker Compose stack catalog (catalog -> enabled framework).
+#
+# Each entry is a prefab compose STACK rendered + brought up by the docker
+# role via `docker compose`. A host opts in with:
+#   compose_enabled: [piracy, ...]
+# in its host_vars. Discoverable by frankinception's catalog -> enabled
+# framework (key ends in `_catalog`), so stack selection is TUI-manageable.
+#
+# Why compose for stacks (vs the per-container docker_container loop):
+# multi-container topologies with shared netns (gluetun + qbittorrent),
+# depends_on ordering, and healthcheck gating are native to compose and
+# fragile to hand-roll. Single, independent containers can stay on the
+# per-container path; stacks live here.
+#
+# Each entry:
+#   template : the compose template under templates/compose/<x>.yml.j2
+#   env      : optional env-file template under templates/compose/<x>.env.j2
+#              (secrets/host values; kept out of the compose YAML)
+#   project  : compose project name (container name prefix, `docker compose
+#              -p`). Defaults to the stack key.
+
+compose_catalog:  # pick many
+  piracy:
+    template: "piracy.yml.j2"
+    env: "piracy.env.j2"
+    project: "piracy"
+
+# -- Piracy stack data -------------------------------------------------
+# The arr apps rendered into the piracy compose template. Each: name, image,
+# web port, and optional extra volumes (beyond the standard /config bind).
+# Add/remove apps here — no template edits needed.
+piracy_arr_apps:
+  - name: prowlarr
+    image: "linuxserver/prowlarr:latest"
+    port: 9696
+  - name: sonarr
+    image: "linuxserver/sonarr:latest"
+    port: 8989
+    extra_volumes:
+      - "{{ droplet_bind_catalog.media.mnt }}/tv:/tv"
+      - "{{ droplet_bind_catalog.media.mnt }}/downloads:/downloads"
+  - name: radarr
+    image: "linuxserver/radarr:latest"
+    port: 7878
+    extra_volumes:
+      - "{{ droplet_bind_catalog.media.mnt }}/movies:/movies"
+      - "{{ droplet_bind_catalog.media.mnt }}/downloads:/downloads"
+  - name: lidarr
+    image: "linuxserver/lidarr:latest"
+    port: 8686
+    extra_volumes:
+      - "{{ droplet_bind_catalog.media.mnt }}/music:/music"
+      - "{{ droplet_bind_catalog.media.mnt }}/downloads:/downloads"
