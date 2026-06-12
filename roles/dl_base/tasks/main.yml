@@ -45,9 +45,9 @@
 # dl_vpn_client kill switch owns nftables (co_hst_sec defers automatically).
 # co_mgmt_cidr defaults to the OOB mgmt net in the role; override per
 # host/group via normal vars if ever needed.
-- name: Apply the common host security baseline
-  ansible.builtin.include_role:
-    name: co_hst_sec
+#- name: Apply the common host security baseline
+#  ansible.builtin.include_role:
+#    name: co_hst_sec
 
 # Fleet-wide log shipping to the central Loki (Mollymauk) over OOB. No-op on
 # the log server itself (co_log_enabled: false in its host_vars) to avoid a
