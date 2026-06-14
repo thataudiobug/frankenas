@@ -31,15 +31,13 @@ services:
       - "6881:6881/udp"        # torrent UDP
     volumes:
       - "{{ droplet_bind_catalog.config.mnt }}/gluetun:/gluetun"
-    environment:
-      VPN_SERVICE_PROVIDER: "${VPN_SERVICE_PROVIDER}"
-      VPN_TYPE: "${VPN_TYPE}"
-      OPENVPN_USER: "${OPENVPN_USER}"
-      OPENVPN_PASSWORD: "${OPENVPN_PASSWORD}"
-      OPENVPN_CUSTOM_CONFIG: "${OPENVPN_CUSTOM_CONFIG}"
-      FIREWALL: "on"
-      FIREWALL_OUTBOUND_SUBNETS: "${FIREWALL_OUTBOUND_SUBNETS}"
-      TZ: "${TZ}"
+    # All gluetun env comes from the rendered .env: the base kill-switch vars
+    # plus the SELECTED provider's own keys (custom -> OPENVPN_CUSTOM_CONFIG;
+    # PIA -> SERVER_REGIONS/VPN_PORT_FORWARDING; etc). Using env_file rather
+    # than enumerating vars keeps this provider-agnostic — adding a provider
+    # to the catalog needs no template change.
+    env_file:
+      - .env
     restart: unless-stopped
     healthcheck:
       # gluetun's own health endpoint flips healthy only once the tunnel is
