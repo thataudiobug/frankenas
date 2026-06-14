@@ -32,7 +32,7 @@ dns_enabled: oob
 # vpn_provider_catalog (group_vars/vpn_clients); that entry supplies the
 # gluetun provider env + vault credentials, and pve_dl writes its custom
 # .ovpn to the config bind at build. TUI-manageable.
-vpn_provider_enabled: ca_toronto
+vpn_provider_enabled: pia
 # Optional: subnets allowed out past gluetun's kill switch (so the qbit web
 # UI stays reachable from OOB even if the tunnel drops). Defaults to the OOB
 # mgmt net in the catalog, so this is only needed to override.
