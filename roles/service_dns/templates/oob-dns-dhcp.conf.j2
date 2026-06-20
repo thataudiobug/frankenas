@@ -8,6 +8,15 @@ expand-hosts
 # Don't forward reverse lookups for our private range upstream.
 bogus-priv
 
+# TTL (seconds) for locally-authoritative answers (host-records + DHCP-lease
+# names). dnsmasq defaults this to 0, which tells clients "never cache" —
+# fine for most resolvers, but it makes nginx (NPM) re-resolve a hostname
+# upstream on essentially every request. Under bursty clients (the arr web
+# UIs) that floods this single resolver, and any dropped UDP reply surfaces
+#  as an intermittent "could not be resolved" -> 502. A small non-zero TTL
+# lets nginx cache the answer and collapses that query storm.
+local-ttl={{ _dns.local_ttl | default(60) }}
+
 # -- Static anchors (authoritative; never leased) ----------------------
 {% for h in _dns.static_hosts %}
 host-record={{ h.name }}.{{ _dns.domain }},{{ h.ip }}
