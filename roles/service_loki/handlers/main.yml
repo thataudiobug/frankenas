@@ -1,0 +1,12 @@
+---
+# handlers file for service_loki
+#
+# The Loki container is owned by service_docker; here we just bounce it so it
+# picks up freshly-rendered config.
+
+- name: Recreate loki container
+  community.docker.docker_container:
+    name: loki
+    state: started
+    restart: true
+  failed_when: false   # container may not exist yet on first provision

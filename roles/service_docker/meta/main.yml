@@ -1,0 +1,8 @@
+galaxy_info:
+  author: frankenas
+  description: Install Docker, deploy catalog containers + compose stacks, wire logs to Alloy
+  license: MIT
+  min_ansible_version: "2.1"
+  galaxy_tags: []
+
+dependencies: []

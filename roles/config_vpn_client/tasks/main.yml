@@ -1,0 +1,276 @@
+---
+# tasks file for config_vpn_client
+#
+# Order matters for a fail-closed setup. We must NOT load the kill switch
+# before the VPN endpoint IPs are known, or we'd block OpenVPN from ever
+# reaching its server. Sequence:
+#   1. select server from the catalog (catalog -> enabled framework)
+#   2. preflight validation (don't lock ourselves out)
+#   3. install packages
+#   4. parse + resolve the endpoint(s) from the .ovpn itself
+#   5. write the .ovpn + credentials from vault
+#   6. DNS + IPv6 hardening
+#   7. load the kill-switch firewall (now that endpoint IPs are pinned)
+#   8. enable + (re)start OpenVPN
+#   9. verify the tunnel is up and egress is leak-free
+
+# -- 1. Server selection -----------------------------------------------
+#
+# Pick the server entry from the catalog using the enabled key, exactly
+# like compute_enabled -> compute_catalog elsewhere in the project.
+
+- name: Assert a server is selected and present in the catalog
+  ansible.builtin.assert:
+    that:
+      - ovpn_server_enabled | length > 0
+      - ovpn_server_catalog is mapping
+      - ovpn_server_enabled in ovpn_server_catalog
+    fail_msg: >-
+      ovpn_server_enabled ('{{ ovpn_server_enabled | default("") }}') must
+      name an entry in ovpn_server_catalog. Available:
+      {{ ovpn_server_catalog.keys() | list }}
+    quiet: true
+
+- name: Resolve the selected server entry
+  ansible.builtin.set_fact:
+    _vpn_server: "{{ ovpn_server_catalog[ovpn_server_enabled] }}"
+
+- name: Bind credentials and config from the catalog entry
+  ansible.builtin.set_fact:
+    config_vpn_client_ovpn_config: "{{ _vpn_server.ovpn_file }}"
+    config_vpn_client_auth_username: "{{ _vpn_server.ovpn_user }}"
+    config_vpn_client_auth_password: "{{ _vpn_server.ovpn_pass }}"
+  no_log: true
+
+# -- 2. Preflight -------------------------------------------------------
+
+- name: Assert required values are present
+  ansible.builtin.assert:
+    that:
+      - config_vpn_client_mgmt_cidr | length > 0
+      - config_vpn_client_ovpn_config | length > 0
+      - config_vpn_client_auth_username | length > 0
+      - config_vpn_client_auth_password | length > 0
+    fail_msg: >-
+      The selected catalog entry must supply ovpn_file, ovpn_user, and
+      ovpn_pass (typically sourced from the vault), and config_vpn_client_mgmt_cidr must
+      be set.
+    quiet: true
+
+- name: Validate management CIDR parses as a network
+  ansible.builtin.assert:
+    that:
+      - config_vpn_client_mgmt_cidr | ansible.utils.ipaddr('net') is truthy
+    fail_msg: "config_vpn_client_mgmt_cidr ({{ config_vpn_client_mgmt_cidr }}) is not a valid CIDR."
+    quiet: true
+
+# -- 2.5, Deal with PCT scenerio ----------------------------------------
+
+# NOTE: /etc/pve/lxc/<vmid>.conf lives on Proxmox's pmxcfs, which rewrites
+# the file through its own parser and strips comment lines it doesn't
+# recognise. blockinfile relies on BEGIN/END marker *comments* to find an
+# existing block, so those markers get eaten and every run re-appends the
+# block. lineinfile matches the literal config key instead, so it stays
+# idempotent with no markers to lose.
+- name: Add tun mappings for pct container
+  ansible.builtin.lineinfile:
+    path: "/etc/pve/lxc/{{ was_built.vmid }}.conf"
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "lxc.cgroup2.devices.allow: c 10:200 rwm"
+    - "lxc.mount.entry: /dev/net dev/net none bind,create=dir"
+  delegate_to: pve
+  when: "'pct' in group_names"
+  register: was_tun_added
+
+
+- name: Chown the tun device
+  file:
+    path: /dev/net/tun
+    owner: 10000
+    group: 10000
+  delegate_to: pve
+  when: "'pct' in group_names"
+
+- name: Reboot container
+  community.proxmox.proxmox:
+    node: pve
+    api_user: robot@pam
+    api_host: 192.168.1.100
+    api_token_id: "{{ api_catalog.pve_api.id }}"
+    api_token_secret: "{{ api_catalog.pve_api.key }}"
+    hostname: '{{ inventory_hostname }}'
+    state: restarted
+  delegate_to: localhost
+  when: was_tun_added is changed
+
+- name: Wait for Container to Become Available
+  wait_for:
+    host: "{{ ansible_host }}"
+    port: 22
+    timeout: 30
+  delegate_to: localhost
+
+# -- 3. Packages --------------------------------------------------------
+
+# With IPv6 disabled (and the kill switch dropping v6 egress) the resolver
+# still returns AAAA records, so apt would try an unreachable IPv6 address
+# first and hang/fail rather than falling back to IPv4. Force apt onto IPv4
+# BEFORE the first apt run so the package install itself succeeds.
+- name: Force apt to use IPv4 (avoids unreachable AAAA addresses)
+  ansible.builtin.template:
+    src: apt-force-ipv4.conf.j2
+    dest: /etc/apt/apt.conf.d/99force-ipv4
+    owner: root
+    group: root
+    mode: "0644"
+  when: config_vpn_client_disable_ipv6 | bool
+
+- name: Install OpenVPN and nftables
+  ansible.builtin.apt:
+    name:
+      - openvpn
+      - nftables
+      - python3       # for ansible modules on the target
+    state: present
+    update_cache: true
+
+# -- 4. Parse + resolve endpoints from the .ovpn -----------------------
+#
+# Everything about the endpoint (host, port, proto) is inferred from the
+# .ovpn — no duplicated vars to drift. Produces ``config_vpn_client_endpoint_rules``.
+
+- name: Parse and resolve endpoints from the .ovpn
+  ansible.builtin.include_tasks: parse_endpoints.yml
+
+# -- 5. Config + credentials from vault --------------------------------
+
+- name: Ensure OpenVPN client config directory exists
+  ansible.builtin.file:
+    path: /etc/openvpn/client
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Write VPN credentials file (from vault)
+  ansible.builtin.template:
+    src: auth.txt.j2
+    dest: "/etc/openvpn/client/{{ config_vpn_client_client_name }}.auth"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart openvpn client
+
+- name: Write the .ovpn config (from vault)
+  ansible.builtin.copy:
+    content: "{{ config_vpn_client_ovpn_config }}"
+    dest: "/etc/openvpn/client/{{ config_vpn_client_client_name }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart openvpn client
+
+# The supplied .ovpn may carry a bare `auth-user-pass` (which prompts
+# interactively) or none at all. Force it to read our credentials file so
+# the service starts unattended.
+- name: Point auth-user-pass at the credentials file
+  ansible.builtin.lineinfile:
+    path: "/etc/openvpn/client/{{ config_vpn_client_client_name }}.conf"
+    regexp: '^\s*auth-user-pass'
+    line: "auth-user-pass /etc/openvpn/client/{{ config_vpn_client_client_name }}.auth"
+    state: present
+  notify: Restart openvpn client
+
+- name: Ensure the tunnel device name is deterministic
+  ansible.builtin.lineinfile:
+    path: "/etc/openvpn/client/{{ config_vpn_client_client_name }}.conf"
+    regexp: '^\s*dev\s+tun'
+    line: "dev {{ config_vpn_client_tun_dev }}"
+    state: present
+  notify: Restart openvpn client
+
+# -- 6. DNS + IPv6 hardening -------------------------------------------
+
+- name: Ensure resolved.conf.d exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure systemd-resolved global DNS (routed via the tunnel)
+  ansible.builtin.template:
+    src: resolved-vpn.conf.j2
+    dest: /etc/systemd/resolved.conf.d/10-vpn.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart systemd-resolved
+
+- name: Disable IPv6 (prevents v6 leaks around an IPv4-only tunnel)
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "1"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - net.ipv6.conf.all.disable_ipv6
+    - net.ipv6.conf.default.disable_ipv6
+  when: config_vpn_client_disable_ipv6 | bool
+
+# -- 7. Kill-switch firewall -------------------------------------------
+#
+# Loaded AFTER endpoint IPs are pinned. nft -f loads atomically: the old
+# ruleset is replaced in one transaction, so there's no window where the
+# host is unprotected.
+
+- name: Install the kill-switch ruleset
+  ansible.builtin.template:
+    src: killswitch.nft.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+    # Validate the syntax before it can be loaded — a bad ruleset that
+    # locks us out is the worst outcome.
+    validate: "nft -c -f %s"
+  notify: Reload nftables
+
+- name: Enable and start nftables
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+    state: started
+
+# Apply the ruleset now (don't wait for the handler) so the kill switch
+# is active before we bring the tunnel up.
+- name: Apply the kill-switch ruleset immediately
+  ansible.builtin.command:
+    cmd: nft -f /etc/nftables.conf
+  changed_when: true
+
+# -- 8. OpenVPN service -------------------------------------------------
+
+- name: Enable and start the OpenVPN client service
+  ansible.builtin.systemd:
+    name: "openvpn-client@{{ config_vpn_client_client_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Flush handlers so any restart happens before verification
+  ansible.builtin.meta: flush_handlers
+
+# -- 9. Verify ----------------------------------------------------------
+#
+# Delegated to a separate task file so the same checks can be run
+# stand-alone via the verify play (plays/config_vpn_client_killswitch_verify.yml).
+
+- name: Verify the tunnel is up and egress is leak-free
+  ansible.builtin.include_tasks: verify.yml

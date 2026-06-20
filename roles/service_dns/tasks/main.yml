@@ -1,0 +1,124 @@
+---
+# tasks file for service_dns
+#
+# Sequence:
+#   1. select the server profile from the catalog (catalog -> enabled ->
+#      overrides framework) and bind it to `_dns`
+#   2. preflight asserts (CIDR/zone/iface sane; self_ip inside cidr)
+#   3. install dnsmasq
+#   4. disable conflicting stub resolver (systemd-resolved on :53)
+#   5. template main conf + the OOB drop-in (with validate)
+#   6. enable + start dnsmasq
+#   7. flush handlers, then verify DHCP/DNS health
+
+# -- 1. Profile selection ----------------------------------------------
+#
+# Pick the profile by key, exactly like compute_enabled -> compute_catalog
+# and ovpn_server_enabled -> ovpn_server_catalog. dns_srv_overrides is then
+# merged over the profile so a host can tweak individual fields (e.g. a
+# different OOB NIC index) without copying the whole entry.
+
+- name: Assert a server profile is selected and present in the catalog
+  ansible.builtin.assert:
+    that:
+      - dns_srv_enabled | length > 0
+      - dns_srv_catalog is mapping
+      - dns_srv_enabled in dns_srv_catalog
+    fail_msg: >-
+      dns_srv_enabled ('{{ dns_srv_enabled | default("") }}') must name an
+      entry in dns_srv_catalog. Available:
+      {{ dns_srv_catalog.keys() | list }}
+    quiet: true
+
+- name: Resolve the selected profile with per-host overrides merged on top
+  ansible.builtin.set_fact:
+    _dns: >-
+      {{
+        dns_srv_catalog[dns_srv_enabled]
+        | combine(dns_srv_overrides | default({}, true), recursive=True)
+      }}
+
+# -- 2. Preflight -------------------------------------------------------
+
+- name: Assert required profile values are present and sane
+  ansible.builtin.assert:
+    that:
+      - _dns.domain | default('') | length > 0
+      - _dns.oob_cidr | ansible.utils.ipaddr('net') is truthy
+      - _dns.self_ip | ansible.utils.ipaddr(_dns.oob_cidr) is truthy
+      - _dns.dhcp_start | ansible.utils.ipaddr(_dns.oob_cidr) is truthy
+      - _dns.dhcp_end | ansible.utils.ipaddr(_dns.oob_cidr) is truthy
+    fail_msg: >-
+      The selected dns_srv profile ('{{ dns_srv_enabled }}') must define a
+      domain, an OOB CIDR, and a self IP + DHCP range that fall inside that
+      CIDR.
+    quiet: true
+
+- name: Install dnsmasq
+  ansible.builtin.apt:
+    name:
+      - dnsmasq
+    state: present
+    update_cache: true
+
+# Ubuntu ships systemd-resolved listening on 127.0.0.53:53, which collides
+# with dnsmasq. Free the port and let dnsmasq own DNS on this box.
+- name: Disable systemd-resolved stub listener (frees :53)
+  ansible.builtin.include_tasks: free_port53.yml
+
+- name: Ensure dnsmasq conf-dir exists
+  ansible.builtin.file:
+    path: /etc/dnsmasq.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write main dnsmasq.conf (delegates to conf-dir)
+  ansible.builtin.template:
+    src: dnsmasq.conf.j2
+    dest: /etc/dnsmasq.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "dnsmasq --test --conf-file=%s"
+  notify: Restart dnsmasq
+
+- name: Write the OOB DHCP+DNS drop-in
+  ansible.builtin.template:
+    src: oob-dns-dhcp.conf.j2
+    dest: /etc/dnsmasq.d/10-oob.conf
+    owner: root
+    group: root
+    mode: "0644"
+    # `validate` only ever sees the single staged temp file (via %s), so it
+    # can't check directives that depend on the rest of the config — but it
+    # does catch syntax errors in this drop-in before it's written. The full
+    # effective-config check happens in the dedicated task below.
+    validate: "dnsmasq --test --conf-file=%s"
+  notify: Restart dnsmasq
+
+# Validate the FULL assembled config (main + every drop-in) now that both
+# files are in place, BEFORE the service (re)starts. `validate` on the
+# template tasks above can't do this — it only sees one staged file at a
+# time — so a directive conflict across files would otherwise only surface
+# at service start. `--test` reads the real /etc/dnsmasq.conf (which pulls
+# in conf-dir) and exits non-zero on any error, failing the play here while
+# the previously running config stays loaded.
+- name: Validate the full effective dnsmasq configuration
+  ansible.builtin.command:
+    cmd: dnsmasq --test
+  changed_when: false
+
+- name: Enable and start dnsmasq
+  ansible.builtin.systemd:
+    name: dnsmasq
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Flush handlers so any restart happens before verification
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify DHCP + DNS health
+  ansible.builtin.include_tasks: verify.yml

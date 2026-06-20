@@ -1,0 +1,46 @@
+---
+# tasks file for service_grafana
+#
+# Prepares config + datasource provisioning for Grafana. The container is
+# deployed separately by service_docker (catalog entry grafana). This role is
+# datasource-agnostic in principle; today it provisions the Loki datasource
+# so the single pane works on first boot, but it can be reused for other
+# backends.
+#
+# Sequence:
+#   1. preflight (config bind present, admin password changed)
+#   2. create the Grafana provisioning dirs on the config bind
+#   3. render datasource provisioning
+#   4. (verification folds into service_loki's stack check)
+
+# -- 1. Preflight ------------------------------------------------------
+- name: Refuse to run with the placeholder Grafana admin password
+  ansible.builtin.assert:
+    that:
+      - grafana_admin_password != "CHANGE_ME_IN_VAULT"
+    fail_msg: >-
+      grafana_admin_password is still the placeholder. Set it from the vault
+      before deploying Grafana.
+    quiet: true
+
+# -- 2. Provisioning dirs ----------------------------------------------
+- name: Create the Grafana datasource provisioning directory
+  ansible.builtin.file:
+    path: "{{ grafana_config_root }}/provisioning/datasources"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# -- 3. Datasource provisioning ----------------------------------------
+- name: Render the Grafana Loki datasource
+  ansible.builtin.template:
+    src: grafana-datasource.yaml.j2
+    dest: "{{ grafana_config_root }}/provisioning/datasources/loki.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recreate grafana container
+
+- name: Flush handlers so Grafana picks up new config
+  ansible.builtin.meta: flush_handlers

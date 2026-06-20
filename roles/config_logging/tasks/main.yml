@@ -1,0 +1,133 @@
+---
+# tasks file for config_logging
+#
+# Installs Grafana Alloy and configures it to ship this host's logs to the
+# central Loki (Mollymauk) over OOB. Sequence:
+#   1. resolve the host's enabled source profiles (catalog -> enabled)
+#   2. install Alloy from Grafana's apt repo
+#   3. render the Alloy config (journald + docker + files as selected)
+#   4. enable/start the service, then verify
+
+- name: Run config_logging only when logging is enabled for this host
+  when: config_logging_enabled | bool
+  block:
+
+    # -- 1. Resolve sources --------------------------------------------
+    - name: Validate every enabled log source exists in the catalog
+      ansible.builtin.assert:
+        that:
+          - item in log_sources_catalog
+        fail_msg: >-
+          Enabled log source '{{ item }}' is not in log_sources_catalog.
+          Available: {{ log_sources_catalog.keys() | list }}
+        quiet: true
+      loop: "{{ log_sources_enabled }}"
+
+    # 'base' is always included so journald ships even if the host listed
+    # nothing. Merge each selected profile; per-host overrides win last.
+    - name: Compose the effective source set (base + enabled + overrides)
+      ansible.builtin.set_fact:
+        _log_sources: >-
+          {{
+            (['base'] + log_sources_enabled) | unique
+            | map('extract', log_sources_catalog)
+            | list
+          }}
+
+    - name: Flatten the merged source flags
+      ansible.builtin.set_fact:
+        _log_journal: "{{ _log_sources | selectattr('journal', 'defined') | map(attribute='journal') | select | list | length > 0 }}"
+        _log_files: >-
+          {{
+            (_log_sources | selectattr('files', 'defined') | map(attribute='files') | list | flatten)
+            + (log_sources_overrides.files | default([]))
+          }}
+
+    # -- 2. Install Alloy ----------------------------------------------
+    - name: Ensure apt prerequisites are present
+      ansible.builtin.apt:
+        name:
+          - gpg
+          - apt-transport-https
+        state: present
+        update_cache: true
+
+    - name: Add the Grafana apt signing key
+      ansible.builtin.get_url:
+        url: "{{ config_logging_alloy_apt_key_url }}"
+        dest: /etc/apt/keyrings/grafana.gpg.armored
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Dearmor the Grafana signing key
+      ansible.builtin.command:
+        cmd: gpg --dearmor --yes -o /etc/apt/keyrings/grafana.gpg /etc/apt/keyrings/grafana.gpg.armored
+      args:
+        creates: /etc/apt/keyrings/grafana.gpg
+
+    - name: Add the Grafana apt repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main"
+        filename: grafana
+        state: present
+        update_cache: true
+
+    - name: Install Grafana Alloy
+      ansible.builtin.apt:
+        name:
+          - alloy
+        state: present
+        update_cache: true
+
+    # -- 3. Configure --------------------------------------------------
+    - name: Ensure the Alloy config directory exists
+      ansible.builtin.file:
+        path: "{{ config_logging_alloy_config_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Render the Alloy base configuration (sink + journald + files)
+      ansible.builtin.template:
+        src: config.alloy.j2
+        dest: "{{ config_logging_alloy_base_config }}"
+        owner: root
+        group: root
+        mode: "0644"
+        # `alloy fmt` parses the file and exits non-zero on syntax errors,
+        # so a malformed render fails the play before the service tries to
+        # load it. It's a syntax check, not a full semantic validation, but
+        # it catches the common breakage (bad block/braces) cheaply.
+        validate: "alloy fmt %s"
+      notify: Restart alloy
+
+    # Point Alloy's service at the config DIRECTORY (merges all *.alloy
+    # files) rather than the default single file, so other roles (the docker
+    # role) can contribute source snippets. CONFIG_FILE accepts a directory.
+    - name: Point Alloy at the config directory
+      ansible.builtin.lineinfile:
+        path: "{{ config_logging_alloy_env_file }}"
+        regexp: '^CONFIG_FILE='
+        line: 'CONFIG_FILE="{{ config_logging_alloy_config_dir }}"'
+        create: true
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart alloy
+
+    - name: Enable and start Alloy
+      ansible.builtin.systemd:
+        name: "{{ config_logging_alloy_service_name }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Flush handlers so a restart lands before verification
+      ansible.builtin.meta: flush_handlers
+
+    # -- 4. Verify -----------------------------------------------------
+    - name: Verify the logging agent
+      ansible.builtin.include_tasks: verify.yml
+      when: config_logging_verify | bool

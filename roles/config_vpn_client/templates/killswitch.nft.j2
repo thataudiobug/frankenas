@@ -1,0 +1,109 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }}
+#
+# Fail-closed VPN kill switch for {{ inventory_hostname }}.
+#
+# Policy: default-drop on input/output/forward. The ONLY ways WAN traffic
+# leaves this host are:
+#   1. through the VPN tunnel ({{ config_vpn_client_tun_dev }}), or
+#   2. directly to the VPN endpoint IP(s) on the physical NIC, which is the
+#      bootstrap exception OpenVPN needs to establish the tunnel.
+# Management-subnet traffic is allowed both directions so SSH/Ansible from
+# the C2 box keeps working even when the tunnel is down.
+#
+# This is an `inet` table, so it covers both IPv4 and IPv6. Any IPv6 WAN
+# egress is dropped by the default policy (no v6 tunnel exception), which
+# prevents v6 leaks.
+
+flush ruleset
+
+table inet killswitch {
+
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        # Loopback.
+        iif "lo" accept
+
+        # Return traffic for connections we initiated.
+        ct state established,related accept
+
+        # Drop obviously invalid packets.
+        ct state invalid drop
+
+        # Management network — keep SSH/Ansible reachable.
+        ip saddr {{ config_vpn_client_mgmt_cidr }} accept
+{% for cidr in config_vpn_client_local_allow_cidrs %}
+        ip saddr {{ cidr }} accept
+{% endfor %}
+
+        # Allow ICMP echo from the management net only (already covered by
+        # the saddr accept above, but explicit for diagnostics).
+        # Everything else falls through to the drop policy.
+    }
+
+    chain forward {
+        # This is a client, not a router — by default nothing is forwarded
+        # (containers get no WAN egress; that stays killed with the tunnel).
+        type filter hook forward priority 0; policy drop;
+
+        # EXCEPTION: Docker published ports are DNAT'd to the container's
+        # bridge IP, so that traffic is *forwarded* (host -> docker bridge),
+        # not delivered to `input`. To reach a container's web GUI from the
+        # OOB management net we must allow that forward path explicitly —
+        # the input-chain mgmt allow does NOT cover forwarded packets.
+        #
+        # Scoped to mgmt-sourced traffic only, so this opens GUIs to the OOB
+        # net WITHOUT giving containers any WAN egress: container-originated
+        # forward traffic has the container IP as saddr (not the mgmt CIDR),
+        # so it still hits the drop policy. No leak.
+        ct state established,related accept
+        ct state invalid drop
+        ip saddr {{ config_vpn_client_mgmt_cidr }} accept
+{% for cidr in config_vpn_client_local_allow_cidrs %}
+        ip saddr {{ cidr }} accept
+{% endfor %}
+    }
+
+    chain output {
+        type filter hook output priority 0; policy drop;
+
+        # Loopback.
+        oif "lo" accept
+
+        # Return traffic for established connections.
+        ct state established,related accept
+        ct state invalid drop
+
+        # Management network — replies to SSH/Ansible, and any
+        # operator-initiated traffic to the management subnet.
+        ip daddr {{ config_vpn_client_mgmt_cidr }} accept
+{% for cidr in config_vpn_client_local_allow_cidrs %}
+        ip daddr {{ cidr }} accept
+{% endfor %}
+
+        # DHCP (so the physical NIC can keep its lease). Server-bound
+        # broadcast on UDP 67; harmless and stays on the local link.
+        udp dport 67 udp sport 68 accept
+
+        # Bootstrap exception: allow reaching the VPN endpoint(s) on the
+        # physical NIC so OpenVPN can build the tunnel. Pinned to resolved
+        # IPs (parsed from the .ovpn's remote line[s]) to avoid a DNS
+        # dependency against this very ruleset. One rule per endpoint, so
+        # failover servers listed in the .ovpn all work.
+{% if config_vpn_client_endpoint_rules | length > 0 %}
+{% for rule in config_vpn_client_endpoint_rules %}
+        ip daddr {{ rule.ip }} {{ rule.proto }} dport {{ rule.port }} accept
+{% endfor %}
+{% else %}
+        # WARNING: no endpoint IPs were resolved. Without this exception
+        # OpenVPN cannot reach its server and the tunnel will never come
+        # up. The play should have failed before reaching this point.
+{% endif %}
+
+        # Everything else must exit via the tunnel. If {{ config_vpn_client_tun_dev }}
+        # is down, this rule matches nothing and traffic hits the drop
+        # policy — that is the kill switch.
+        oifname "{{ config_vpn_client_tun_dev }}" accept
+    }
+}

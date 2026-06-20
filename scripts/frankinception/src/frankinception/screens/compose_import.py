@@ -554,7 +554,7 @@ class _ManualVolumeScreen(ModalScreen[str | None]):
     def _splice_bind_at_cursor(self, key: str) -> None:
         """Insert the chosen bind expression at the current cursor position."""
         inp: Input = self.query_one("#vol-input", Input)
-        snippet = "{{ docker_bind_catalog." + key + ".mnt }}"
+        snippet = "{{ droplet_bind_catalog." + key + ".mnt }}"
         text = inp.value
         pos = inp.cursor_position
         new_text = text[:pos] + snippet + text[pos:]

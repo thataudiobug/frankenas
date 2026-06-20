@@ -55,7 +55,7 @@ def insert_bind_var(screen, state, input_id: str) -> None:  # noqa: ANN001
         if key is None:
             return
         splice_at_cursor(
-            screen, input_id, "{{ docker_bind_catalog." + key + ".mnt }}"
+            screen, input_id, "{{ droplet_bind_catalog." + key + ".mnt }}"
         )
 
     screen.app.push_screen(

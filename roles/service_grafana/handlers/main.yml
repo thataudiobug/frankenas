@@ -1,0 +1,12 @@
+---
+# handlers file for service_grafana
+#
+# The Grafana container is owned by service_docker; here we just bounce it so
+# it picks up freshly-rendered provisioning config.
+
+- name: Recreate grafana container
+  community.docker.docker_container:
+    name: grafana
+    state: started
+    restart: true
+  failed_when: false   # container may not exist yet on first provision

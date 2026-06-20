@@ -1,0 +1,10 @@
+---
+# handlers file for config_hardening
+
+# Reload (not restart) so the live connection Ansible is riding on survives
+# even if the new config would have refused it. sshd re-reads config for new
+# connections only; existing sessions are untouched.
+- name: Reload sshd
+  ansible.builtin.systemd:
+    name: "{{ config_hardening_ssh_service_name }}"
+    state: reloaded

@@ -1,0 +1,41 @@
+---
+# defaults file for service_loki
+#
+# service_loki prepares the central log-aggregation server (Mollymauk): it
+# renders the Loki and Grafana configuration onto the host's bind-mounted
+# storage so the Docker stack (loki + grafana, deployed via the `docker`
+# role's catalog) can mount them. Loki chunk/index data lives on the Nott
+# 2TB mirror; the OS disk stays read-mostly.
+#
+# This role owns CONFIG + STORAGE LAYOUT only. The containers themselves are
+# defined in docker_containers_catalog (loki, grafana) and deployed by the
+# `docker` role — same split as every other service droplet.
+
+# -- Storage layout (on the Nott bind) ---------------------------------
+# The Nott dataset is bind-mounted into the guest at /mnt/nott (see
+# droplet_bind_catalog.nott). Everything heavy goes under here.
+service_loki_data_root: "/mnt/nott/loki"
+service_loki_config_root: "/mnt/config/loki"          # small config, on config bind
+
+# Subdirs Loki needs (chunks, rules, compactor working dir, WAL).
+service_loki_loki_dirs:
+  - "{{ service_loki_data_root }}/chunks"
+  - "{{ service_loki_data_root }}/rules"
+  - "{{ service_loki_data_root }}/compactor"
+  - "{{ service_loki_data_root }}/wal"
+
+# -- Retention ---------------------------------------------------------
+# 180 days, per the plan. The Nott mirror is dedicated to logs for now, so
+# this is generous on purpose; tune down later if it grows faster than
+# expected. retention_period must be a multiple of 24h for Loki.
+service_loki_retention_period: "4320h"   # 180 days
+service_loki_retention_enabled: true
+
+# -- Loki listen / bind ------------------------------------------------
+# Loki has NO authentication by default, so it must only ever listen on the
+# OOB management interface. The container publishes this port; the config_firewall
+# profile restricts :3100 to the OOB CIDR as defence in depth.
+service_loki_loki_http_port: 3100
+service_loki_loki_grpc_port: 9095
+
+service_loki_verify: true

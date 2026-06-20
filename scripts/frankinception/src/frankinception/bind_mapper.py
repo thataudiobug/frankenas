@@ -108,7 +108,7 @@ def match_volume(volume: str, bind_catalog: dict[str, Any]) -> VolumeMatch:
         )
 
     suffix = host[len(best_src):]
-    rewritten_host = "{{ docker_bind_catalog." + best_key + ".mnt }}" + suffix
+    rewritten_host = "{{ droplet_bind_catalog." + best_key + ".mnt }}" + suffix
     rendered = f"{rewritten_host}:{container}"
     if mode:
         rendered += f":{mode}"

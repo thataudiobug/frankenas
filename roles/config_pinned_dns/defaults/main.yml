@@ -1,0 +1,58 @@
+---
+# defaults file for config_pinned_dns
+#
+# Registers a static-anchor ("pinned") host's DNS record on the central
+# dnsmasq server at build time. Pinned hosts have a STATIC OOB IP below the
+# DHCP pool, so they never send a DHCP request — which means dnsmasq can't
+# auto-register them from a lease the way it does for dynamic hosts. Their
+# FQDN only resolves if an explicit host-record exists in dnsmasq's config.
+#
+# This role writes that record FOR the targeted host BY delegating to the
+# DNS server, so a `critical`-group host registers itself whenever its play
+# runs — no more hand-editing the dns_srv_catalog static_hosts and
+# remembering to re-run the DNS play.
+#
+# Required host_var (on each pinned host):
+#   the host's static OOB address — taken automatically from
+#   network_enabled.oob.ip (the single source of truth for the pinned IP).
+#
+# The record NAME defaults to inventory_hostname; override per host if the
+# desired FQDN label differs from the inventory name.
+
+# Internal DNS zone the record is published into. Matches dns_srv_catalog's
+# `domain`. Kept here (not read from that catalog) so the role is self-
+# contained and usable without the DNS catalog being in scope.
+config_pinned_dns_domain: "oob.frankenas.lan"
+
+# The inventory group whose member(s) ARE the DNS server. Used both to find
+# the delegation target and to skip self-registration (the DNS server's own
+# record lives in the bootstrap static_hosts catalog).
+config_pinned_dns_server_group: "dns_srv"
+
+# The host to delegate the record-write to: the first member of the DNS
+# server group. Reachable by its static anchor IP (ansible_host).
+config_pinned_dns_target: "{{ (groups[config_pinned_dns_server_group] | default([])) | first | default('') }}"
+
+# DNS record label (the bit before the domain). Defaults to the inventory
+# name; override per host if the published FQDN should differ.
+config_pinned_dns_record: "{{ inventory_hostname }}"
+
+# The address to publish. SINGLE SOURCE OF TRUTH: derived from the host's OOB
+# NIC definition (network_enabled.oob.ip) so it can never drift from the IP
+# the host is actually built with. That value may carry a CIDR suffix (e.g.
+# "10.128.0.2/9"); ipaddr('address') strips it to the bare address a
+# host-record needs. An explicit `pinned_dns_ip` host_var still wins if set,
+# as an escape hatch for hosts whose published IP differs from their OOB NIC.
+config_pinned_dns_ip: >-
+  {{
+    pinned_dns_ip
+    | default(
+        (
+          ((network_enabled | default({}, true)).oob | default({}, true)).ip
+          | default('')
+        ) | ansible.utils.ipaddr('address') | default('', true)
+      )
+  }}
+
+# Where dnsmasq loads conf-dir drop-ins from (matches service_dns).
+config_pinned_dns_dropin_dir: "/etc/dnsmasq.d"

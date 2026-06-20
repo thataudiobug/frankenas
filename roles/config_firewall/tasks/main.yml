@@ -1,0 +1,52 @@
+---
+# tasks file for config_firewall
+#
+# One firewall role, applied at the HIGHEST available enforcement layer for
+# each host. This merges the old pve_fw (per-guest hypervisor rules), the old
+# es_hst_pve (Proxmox node cluster/host firewall), and the in-guest nftables
+# baseline that used to live in co_hst_sec.
+#
+# Routing (highest layer wins):
+#   * Proxmox guest (pct or qemu)  -> guest_pve.yml
+#       Rules rendered on the pve node as /etc/pve/firewall/<vmid>.fw and
+#       enforced on the guest's veth. Tamper-resistant: root inside a
+#       compromised guest cannot edit them.
+#   * Proxmox node (hosts_baremetal) -> node_pve.yml
+#       Datacenter (cluster.fw) master switch + the node's own host.fw,
+#       restricting mgmt surfaces to the OOB network.
+#   * Any other baremetal           -> baseline_nft.yml
+#       In-guest nftables default-drop input baseline.
+#
+# Hosts running the VPN kill switch (config_vpn_client) own /etc/nftables.conf
+# themselves, so the in-guest baseline defers to them automatically.
+
+- name: Resolve the firewall enforcement layer for this host
+  ansible.builtin.set_fact:
+    _fw_layer: >-
+      {{
+        'guest_pve' if ('pct' in group_names or 'qemu' in group_names)
+        else 'node_pve' if ('hosts_baremetal' in group_names)
+        else 'baseline_nft'
+      }}
+
+- name: Note the selected firewall enforcement layer
+  ansible.builtin.debug:
+    msg: "config_firewall: enforcing at '{{ _fw_layer }}' for {{ inventory_hostname }}."
+
+# -- Proxmox guest: hypervisor-enforced per-guest .fw ------------------
+- name: Apply hypervisor-enforced guest firewall
+  ansible.builtin.include_tasks: guest_pve.yml
+  when: _fw_layer == 'guest_pve'
+
+# -- Proxmox node: datacenter + host firewall -------------------------
+- name: Harden the Proxmox node firewall
+  ansible.builtin.include_tasks: node_pve.yml
+  when: _fw_layer == 'node_pve'
+
+# -- Other baremetal: in-guest nftables baseline ----------------------
+- name: Apply the in-guest nftables baseline
+  ansible.builtin.include_tasks: baseline_nft.yml
+  when:
+    - _fw_layer == 'baseline_nft'
+    - config_firewall_enabled | bool
+    - "'vpn_clients' not in group_names"

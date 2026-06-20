@@ -1,0 +1,8 @@
+---
+# handlers file for config_logging
+
+- name: Restart alloy
+  ansible.builtin.systemd:
+    name: "{{ config_logging_alloy_service_name }}"
+    state: restarted
+    daemon_reload: true

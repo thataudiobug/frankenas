@@ -1,0 +1,146 @@
+---
+# defaults file for config_firewall
+#
+# One firewall role applied at the highest available layer per host. Merges
+# the old config_firewall (guest), config_firewall (node), and the config_hardening in-guest
+# nftables baseline. The routing in tasks/main.yml picks exactly one layer.
+#
+# Variables are namespaced by enforcement layer:
+#   * config_firewall_guest_*       — Proxmox per-guest .fw (layer A)
+#   * config_firewall_node_* / _dc_ — Proxmox node cluster+host.fw (layer B)
+#   * config_firewall_*             — in-guest nftables baseline (layer C)
+
+# =====================================================================
+# Layer A — Proxmox GUEST firewall (per-guest <vmid>.fw on the pve node)
+# =====================================================================
+# Proxmox API / node connection (mirrors provision_proxmox).
+config_firewall_guest_node: "pve"
+# NOTE: still the literal WAN management address. Once the Proxmox API is
+# rebound to the OOB anchor, change this to 10.128.0.1.
+config_firewall_guest_api_host: "192.168.1.100"
+config_firewall_guest_api_user: "robot@pam"
+config_firewall_guest_api_token_id: "{{ api_catalog.pve_api.id }}"
+config_firewall_guest_api_token_secret: "{{ api_catalog.pve_api.key }}"
+
+# Profile selection (catalog -> enabled -> overrides). Host-var names a
+# firewall_catalog entry; empty => guest layer is a no-op. The catalog moved
+# here from group_vars/pct in Phase 3; frankinception discovers it via the
+# `# pick one` marker.
+firewall_enabled: ""
+firewall_overrides: {}
+
+firewall_catalog:  # pick one
+  # WAN-facing reverse proxy (e.g. the NPM host). Only HTTP/HTTPS from the
+  # WAN segment; everything else inbound is dropped. If/when you lock the
+  # origin to Cloudflare ranges, narrow `source` here to those CIDRs.
+  edge:
+    policy_in: DROP
+    policy_out: ACCEPT
+    rules:
+      - { type: in, action: ACCEPT, proto: tcp, dport: "80,443", comment: "HTTP(S) ingress" }
+
+  # Internal service guest: no public ingress at all. Reachable only over
+  # OOB management (unfiltered NIC) and whatever it initiates outbound.
+  internal:
+    policy_in: DROP
+    policy_out: ACCEPT
+    rules: []
+
+  # Docker app host behind the reverse proxy: accept app traffic only from
+  # the WAN service segment (10.0.0.0/9), not the whole internet. Adjust the
+  # ports to match what the proxy actually forwards.
+  app_behind_proxy:
+    policy_in: DROP
+    policy_out: ACCEPT
+    rules:
+      - { type: in, action: ACCEPT, source: "10.0.0.0/9", proto: tcp, dport: "8096,8080", comment: "app ports from WAN service net" }
+
+  # Central log server (Mollymauk). Loki (3100) and Grafana (3000) are
+  # reachable from the OOB management net ONLY — Loki is unauthenticated, so
+  # this firewall is load-bearing, not just defence in depth. No WAN ingress.
+  logserver:
+    policy_in: DROP
+    policy_out: ACCEPT
+    rules:
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 3100, comment: "Loki push/query (OOB only)" }
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 3000, comment: "Grafana UI (OOB only)" }
+
+  # Central identity stack (Orthax). Authelia (9091), Redis (6379), LLDAP
+  # LDAP (3890) + LLDAP web UI (17170) reachable from the OOB management net
+  # ONLY. The public Authelia login portal comes through NPM (which reaches
+  # Authelia over OOB), so no WAN ingress is needed. The directory and Redis
+  # must never be WAN-reachable.
+  identity:
+    policy_in: DROP
+    policy_out: ACCEPT
+    rules:
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 9091, comment: "Authelia portal/forward-auth (OOB only)" }
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 6379, comment: "Redis (OOB only)" }
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 3890, comment: "LLDAP LDAP (OOB only)" }
+      - { type: in, action: ACCEPT, source: "10.128.0.0/9", proto: tcp, dport: 17170, comment: "LLDAP web UI (OOB only)" }
+
+# Management network lockout safety net (OOB).
+config_firewall_guest_mgmt_cidr: "10.128.0.0/9"
+config_firewall_guest_inject_mgmt_ssh: true
+config_firewall_guest_ssh_port: 22
+
+# Verify the datacenter master switch is on (guest .fw rules are inert until
+# it is). Warn loudly if off.
+config_firewall_guest_check_datacenter_enabled: true
+config_firewall_guest_verify: true
+
+# =====================================================================
+# Layer B — Proxmox NODE firewall (datacenter cluster.fw + node host.fw)
+# =====================================================================
+# OOB management network — the ONLY place the node's mgmt surfaces are
+# reachable (SSH/API/web UI allowed from here and nowhere else).
+config_firewall_node_mgmt_cidr: "10.128.0.0/9"
+config_firewall_node_wan_cidr: "10.0.0.0/9"
+
+# Datacenter (cluster) firewall master switch + cluster policy.
+config_firewall_node_dc_firewall_enable: true
+config_firewall_node_dc_policy_in: "DROP"
+config_firewall_node_dc_policy_out: "ACCEPT"
+
+# Node management surfaces (allowed from OOB only).
+config_firewall_node_mgmt_ports:
+  - { proto: tcp, port: 22, comment: "SSH (OOB only)" }
+  - { proto: tcp, port: 8006, comment: "Proxmox web UI / API (OOB only)" }
+  - { proto: tcp, port: 3128, comment: "SPICE proxy (OOB only)" }
+  - { proto: tcp, port: "5900:5999", comment: "VNC console (OOB only)" }
+
+# Cluster/corosync peer CIDRs to allow between nodes (empty on single node).
+config_firewall_node_cluster_peers: []
+config_firewall_node_verify: true
+
+# =====================================================================
+# Layer C — in-guest nftables baseline (non-Proxmox baremetal)
+# =====================================================================
+# Master switch for the in-guest baseline. The router in main.yml already
+# restricts this layer to non-Proxmox baremetal; this lets you disable it
+# entirely there too.
+config_firewall_enabled: true
+config_firewall_conf_path: "/etc/nftables.conf"
+
+# Allow ICMP/ICMPv6 from the management network for diagnostics.
+config_firewall_allow_icmp_from_mgmt: true
+
+# Ports open to the WORLD (0.0.0.0/0, ::/0). Keep tight.
+#   { proto: tcp|udp, port: <int or "n-m"> }
+config_firewall_allow_ports_public: []
+
+# Ports open only to specific source CIDRs.
+#   { proto: tcp|udp, port: <int/range>, cidr: <CIDR> }
+config_firewall_allow_ports_restricted: []
+
+# SSH from the mgmt net is always allowed and added automatically.
+config_firewall_allow_ssh_from_mgmt: true
+config_firewall_ssh_port: 22
+config_firewall_manage_service: true
+
+# Management CIDR for the baseline allowlist (matches the other layers).
+config_firewall_mgmt_cidr: "10.128.0.0/9"
+config_firewall_admin_extra_cidrs: []
+
+# Re-check the baseline after applying.
+config_firewall_verify: false

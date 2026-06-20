@@ -37,14 +37,32 @@ frankinception --inventory ~/frankenas/inventories/prod
 * Lists hosts from `hosts.yml` and shows their group membership.
 * For each host, edits `host_vars/<host>.yml`:
   * Toggle group membership in `hosts.yml` (parent groups follow children).
-  * Pick values from any `*_catalog.yml` discovered under the host's groups
-    (compute, storage, network, accelerator, OS, users, docker groups).
+  * Pick values from any `*_catalog` discovered for the host. Catalogs come
+    from two places:
+    * **role defaults/vars** — role-owned catalogs (e.g. `compute_catalog`
+      in `provision_proxmox`, `firewall_catalog` in `config_firewall`,
+      `docker_*_catalog` in `service_docker`). The tool resolves which roles
+      run against a host by reading the playbooks that target the host's
+      groups, then following `include_role`/`import_role` and `meta`
+      dependencies.
+    * **group_vars** — cross-cutting catalogs that aren't owned by one role
+      (e.g. `users_catalog`, the `droplet_bind_catalog` reference table).
   * Per-container overrides for docker hosts.
 * Imports `docker run` lines and `docker-compose.yml` services into
-  `docker_containers_catalog`, mapping host paths against `docker_bind_catalog`
-  (and prompting to add new binds when no match is found).
+  `docker_containers_catalog` (in `roles/service_docker/defaults/main/`),
+  mapping host paths against `droplet_bind_catalog` (and prompting to add new
+  binds when no match is found).
 * Lists playbooks under `plays/` with descriptions and runs the selected one,
   optionally limited to the current host.
+
+## Where catalogs live
+
+Each `*_catalog` declares its selection behaviour with a marker comment
+(`# pick one`, `# pick many`, `# reference`) read directly off the catalog
+key. Role-owned catalogs live in that role's `defaults/main.yml` (or a
+`defaults/main/<name>.yml` file in the directory form); cross-cutting ones
+stay under `inventories/<env>/group_vars/`. The companion host-var is always
+`<stem>_enabled`.
 
 ## Play descriptions
 

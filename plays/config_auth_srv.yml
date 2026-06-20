@@ -1,0 +1,44 @@
+# Deploy the central identity stack (Orthax): LLDAP + Authelia + Redis.
+#
+#   ansible-playbook plays/config_auth_srv.yml --limit orthax
+#
+# Order matters:
+#   1. provision_proxmox — build the LXC (s8 OS) on the identity anchor .4,
+#                     apply the config bind + the hypervisor firewall
+#                     (identity profile, OOB-only for 9091/6379/3890/17170)
+#   2. service_lldap  — prepare the LLDAP data dir (the user store/directory)
+#   3. service_authelia — render Authelia config (LDAP backend) + secrets
+#   4. service_docker — deploy lldap + authelia + redis (identity group)
+#
+# Run with the vault available so all identity secrets resolve.
+#
+# FIRST-BOOT: after the stack is up, in the LLDAP web UI (:17170, OOB-only)
+# create the 'authelia_bind' account with lldap_password_manager, plus your
+# groups (admins, media) and users. See roles/service_lldap/README.md.
+---
+- name: Provision the identity server container
+  hosts: auth_srv
+  gather_facts: false
+  connection: local
+  roles:
+    - role: provision_proxmox
+      when: "'droplets' in group_names"
+    # Register the static-anchor DNS record on the DNS server so the box
+    # resolves by FQDN (it doesn't DHCP, so dnsmasq won't auto-register it).
+    - role: config_pinned_dns
+      when: "'critical' in group_names"
+
+- name: Prepare the LLDAP directory
+  hosts: auth_srv
+  gather_facts: true
+  become: true
+  roles:
+    - service_lldap
+    - service_authelia
+
+- name: Deploy the identity containers
+  hosts: auth_srv
+  gather_facts: true
+  become: true
+  roles:
+    - service_docker

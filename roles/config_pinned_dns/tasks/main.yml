@@ -1,0 +1,77 @@
+---
+# tasks file for config_pinned_dns
+#
+# Publishes a host-record for this (pinned) host on the central dnsmasq
+# server, delegated to that server. The address comes from
+# config_pinned_dns_ip, which is derived from the host's OOB NIC
+# (network_enabled.oob.ip) so it can't drift from the built IP. Skips when:
+#   * the host has no resolvable OOB IP (not actually a pinned host), or
+#   * the host IS the DNS server (it can't/shouldn't register through itself;
+#     its own anchor lives in the bootstrap dns_srv_catalog static_hosts), or
+#   * no DNS server is present in the inventory to delegate to.
+
+- name: Determine whether to register a pinned DNS record
+  ansible.builtin.set_fact:
+    # True only when there's an IP to publish, a server to publish it on, and
+    # this host isn't that server.
+    _pinned_should_register: >-
+      {{
+        ((config_pinned_dns_ip | string | length) > 0)
+        and (config_pinned_dns_target | length > 0)
+        and (config_pinned_dns_server_group not in group_names)
+      }}
+
+- name: Note why pinned DNS registration is skipped
+  ansible.builtin.debug:
+    msg: >-
+      config_pinned_dns: skipping for {{ inventory_hostname }}
+      ({% if (config_pinned_dns_ip | string | length) == 0 %}no OOB IP (network_enabled.oob.ip unset and no pinned_dns_ip override)
+      {%- elif config_pinned_dns_server_group in group_names %}host is the DNS server itself
+      {%- elif config_pinned_dns_target | length == 0 %}no DNS server in inventory
+      {%- else %}unknown{% endif %}).
+  when: not (_pinned_should_register | bool)
+
+- name: Register the pinned host record on the DNS server
+  when: _pinned_should_register | bool
+  delegate_to: "{{ config_pinned_dns_target }}"
+  block:
+    # Preflight: a malformed IP would publish a broken record. Validate it
+    # parses as an address before we touch the DNS server's config.
+    - name: Assert the pinned IP is a valid address
+      ansible.builtin.assert:
+        that:
+          - config_pinned_dns_ip | ansible.utils.ipaddr('address') is truthy
+        fail_msg: >-
+          config_pinned_dns_ip ('{{ config_pinned_dns_ip }}') for
+          {{ inventory_hostname }} is not a valid IP address. It is derived
+          from network_enabled.oob.ip — check that NIC definition (or set a
+          pinned_dns_ip override).
+        quiet: true
+
+    - name: Ensure the dnsmasq conf-dir exists
+      ansible.builtin.file:
+        path: "{{ config_pinned_dns_dropin_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    # One drop-in per pinned host (20- so it loads after service_dns's
+    # 10-oob.conf). Per-host files mean each host owns exactly its own record
+    # and re-runs are idempotent — no shared file to race or clobber. The
+    # `validate` runs dnsmasq --test against the staged file before it lands,
+    # so a bad render can't break the running resolver.
+    - name: Write the pinned host record drop-in
+      ansible.builtin.template:
+        src: pinned-record.conf.j2
+        dest: "{{ config_pinned_dns_dropin_dir }}/20-pinned-{{ config_pinned_dns_record }}.conf"
+        owner: root
+        group: root
+        mode: "0644"
+        validate: "dnsmasq --test --conf-file=%s"
+      notify: Restart dnsmasq (pinned dns)
+
+    # Flush now so the record is live before the play moves on (a later task
+    # on this host may rely on its own FQDN resolving).
+    - name: Flush handlers so the record is live immediately
+      ansible.builtin.meta: flush_handlers

@@ -1,0 +1,16 @@
+# Register/refresh the DNS records for all pinned (static-anchor) hosts.
+#
+#   ansible-playbook plays/register_pinned_dns.yml
+#   ansible-playbook plays/register_pinned_dns.yml --limit mollymauk
+#
+# Use this to (re)publish host-records on the DNS server without rebuilding a
+# host — e.g. after adding a new critical host, or to repair a stale record.
+# config_pinned_dns delegates the write to the DNS server and skips the DNS
+# server's own entry (its anchor lives in dns_srv_catalog static_hosts).
+---
+- name: Register pinned DNS records for critical hosts
+  hosts: critical
+  gather_facts: false
+  connection: local
+  roles:
+    - config_pinned_dns

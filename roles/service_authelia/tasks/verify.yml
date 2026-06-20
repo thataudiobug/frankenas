@@ -1,0 +1,58 @@
+---
+# Verification for service_authelia. Confirms config + user DB are in place and
+# (if the stack is running) Authelia reports healthy. Read-only.
+
+- name: Confirm the Authelia config was rendered
+  ansible.builtin.stat:
+    path: "{{ service_authelia_config_root }}/configuration.yml"
+  register: _as_cfg
+
+- name: Assert config exists
+  ansible.builtin.assert:
+    that:
+      - _as_cfg.stat.exists
+    fail_msg: "Authelia configuration.yml was not rendered."
+    quiet: true
+
+# Authelia binds to LLDAP at startup; confirm the directory's LDAP port is
+# reachable from this host (same identity stack). A closed port means
+# Authelia will fail to start its backend.
+- name: Check the LLDAP LDAP port is reachable
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: 3890
+    timeout: 10
+    state: started
+  register: _as_ldap
+  failed_when: false
+
+# Authelia's health endpoint returns 200 when the server is up. Probing it
+# confirms the container started and parsed its config (a bad config crashes
+# it on boot, which would surface here).
+- name: Probe the Authelia health endpoint (if running)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ service_authelia_port }}/api/health"
+    status_code: [200]
+    timeout: 10
+  register: _as_health
+  failed_when: false
+  changed_when: false
+
+- name: Warn if Authelia is not healthy yet
+  ansible.builtin.debug:
+    msg: >-
+      Authelia health check did not return 200 (got
+      {{ _as_health.status | default('no response') }}). If the stack was
+      just deployed it may still be starting; otherwise check
+      `docker logs authelia` for a config parse error.
+  when: _as_health.status | default(0) != 200
+
+- name: Summarise auth server verification
+  ansible.builtin.debug:
+    msg:
+      - "config rendered: {{ _as_cfg.stat.exists }}"
+      - "ldap backend: {{ service_authelia_ldap_address }} (base {{ service_authelia_ldap_base_dn }})"
+      - "lldap reachable: {{ not (_as_ldap.failed | default(true)) }}"
+      - "access rules: {{ authelia_access_catalog | length }}"
+      - "default policy: {{ service_authelia_default_policy }}"
+      - "authelia healthy: {{ _as_health.status | default('not running yet') }}"

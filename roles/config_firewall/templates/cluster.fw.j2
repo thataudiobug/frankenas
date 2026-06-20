@@ -1,0 +1,20 @@
+#{{ ansible_managed }}
+# Datacenter (cluster-wide) Proxmox firewall. Managed by config_firewall.
+#
+# The master switch: until enable=1 here, every per-guest .fw file (pve_fw)
+# and the node host.fw are inert. Proxmox keeps built-in defaults that avoid
+# cutting your current management session when you enable it.
+
+[OPTIONS]
+enable: {{ '1' if config_firewall_node_dc_firewall_enable | bool else '0' }}
+policy_in: {{ config_firewall_node_dc_policy_in }}
+policy_out: {{ config_firewall_node_dc_policy_out }}
+
+[RULES]
+# Management surfaces are allowed cluster-wide from the OOB network only.
+# Node-specific allowances also live in host.fw; these cluster rules apply
+# everywhere and keep management reachable across all nodes.
+{% for p in config_firewall_node_mgmt_ports %}
+IN ACCEPT -source {{ config_firewall_node_mgmt_cidr }} -p {{ p.proto }} -dport {{ p.port }}{% if p.comment is defined %} # {{ p.comment }}{% endif %}
+
+{% endfor %}

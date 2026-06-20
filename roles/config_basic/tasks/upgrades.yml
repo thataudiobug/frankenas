@@ -1,0 +1,49 @@
+---
+# Unattended SECURITY upgrades.
+#
+# Narrower on purpose than config_basic's `apt name=* state=latest`: that pulls
+# every feature update on an operator-driven converge and can break things
+# mid-play. This configures unattended-upgrades to apply only the security
+# origins, automatically, on apt's periodic timer — closing the gap between
+# a CVE fix landing and the next manual run, without surprise feature bumps.
+
+- name: Install unattended-upgrades
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+    state: present
+    update_cache: true
+
+- name: Configure unattended-upgrades (security origins only)
+  ansible.builtin.template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable the apt periodic update/upgrade timer
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+# Validate the assembled apt config parses cleanly. `apt-config dump` reads
+# every file under apt.conf.d and exits non-zero on a syntax error, so a
+# malformed template surfaces here rather than silently disabling auto
+# patching.
+- name: Validate the effective apt configuration
+  ansible.builtin.command:
+    cmd: apt-config dump
+  changed_when: false
+
+- name: Ensure the unattended-upgrades timer is enabled and running
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer

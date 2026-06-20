@@ -1,0 +1,8 @@
+# Deploy VPN client + kill switch to vpn_clients hosts
+---
+- name: Deploy VPN client with kill switch
+  hosts: vpn_clients
+  gather_facts: true
+  become: true
+  roles:
+    - role: config_vpn_client

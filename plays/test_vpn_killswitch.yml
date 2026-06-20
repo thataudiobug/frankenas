@@ -1,0 +1,21 @@
+# Verify VPN kill switch — checks the tunnel is up and egress is leak-free
+---
+# Stand-alone leak test for hosts running the config_vpn_client role. Runs
+# the same verification used at the end of provisioning, but applies no
+# configuration — safe for ad-hoc or scheduled (cron/hook) checks.
+#
+# Usage:
+#   ansible-playbook plays/test_vpn_killswitch.yml --limit <host>
+#
+# Exits non-zero if any host fails verification (when vpn_verify_strict is
+# true), so it's suitable as a monitoring probe.
+
+- name: Verify VPN kill switch
+  hosts: vpn_clients
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Run kill-switch verification
+      ansible.builtin.include_role:
+        name: config_vpn_client
+        tasks_from: verify.yml

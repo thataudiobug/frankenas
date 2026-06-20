@@ -1,0 +1,7 @@
+---
+# handlers file for config_time
+
+- name: Restart chrony
+  ansible.builtin.systemd:
+    name: "{{ config_time_chrony_service_name }}"
+    state: restarted

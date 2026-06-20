@@ -1,0 +1,38 @@
+---
+# Wire Docker container logs into the Grafana Alloy log agent.
+#
+# Ownership note: the Alloy AGENT is installed by config_logging (fleet-wide,
+# host-agnostic). The DOCKER source belongs here because it's a docker
+# concern — config_logging must not create docker groups/sockets on non-docker
+# hosts. So the docker role contributes a docker-source snippet into Alloy's
+# config directory ONLY after Docker is installed, and grants Alloy access to
+# the socket. Alloy merges all *.alloy files in the dir, so this snippet
+# references the `loki.write.central` sink config_logging already defined.
+#
+# This whole file is a no-op when Alloy isn't present (logging disabled on
+# the host), so the docker role stays usable on its own.
+
+- name: Check whether the Alloy log agent is installed
+  ansible.builtin.stat:
+    path: "{{ docker_alloy_config_dir }}"
+  register: _docker_alloy_dir
+
+- name: Integrate Docker logs into Alloy
+  when: _docker_alloy_dir.stat.exists
+  block:
+    - name: Add the Alloy service user to the docker group
+      ansible.builtin.user:
+        name: "{{ docker_alloy_user }}"
+        groups: docker
+        append: true
+      notify: Restart alloy for docker logs
+
+    - name: Drop the Alloy docker-source snippet
+      ansible.builtin.template:
+        src: alloy-docker.alloy.j2
+        dest: "{{ docker_alloy_config_dir }}/30-docker.alloy"
+        owner: root
+        group: root
+        mode: "0644"
+        validate: "alloy fmt %s"
+      notify: Restart alloy for docker logs

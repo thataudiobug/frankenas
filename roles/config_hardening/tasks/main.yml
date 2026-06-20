@@ -1,0 +1,28 @@
+---
+# tasks file for config_hardening
+#
+# Host-level lockdown. Currently this is SSH hardening (a validated drop-in
+# under /etc/ssh/sshd_config.d/, reloaded — never restarted — so a bad config
+# can't strand the live Ansible session). Other host-hardening concerns can
+# be added here as their own task files.
+#
+# Split out of the old config_hardening: initial bring-up + unattended upgrades
+# moved to config_basic, time sync to config_time, and all firewalling
+# (in-guest nftables + Proxmox) to config_firewall. Hardening keeps the
+# no-lockout preflight that guards the SSH change.
+
+- name: Preflight validation (don't lock ourselves out)
+  ansible.builtin.include_tasks: preflight.yml
+
+- name: Harden SSH
+  ansible.builtin.include_tasks: ssh.yml
+  when: config_hardening_ssh_harden_enabled | bool
+
+# Flush handlers so any sshd reload lands before we verify.
+- name: Flush handlers before verification
+  ansible.builtin.meta: flush_handlers
+  when: config_hardening_verify | bool
+
+- name: Verify the applied hardening
+  ansible.builtin.include_tasks: verify.yml
+  when: config_hardening_verify | bool

@@ -1,0 +1,24 @@
+#{{ ansible_managed }}
+# Node (host) Proxmox firewall for {{ inventory_hostname }}. Managed by
+# config_firewall. Restricts the node's own management surfaces — web UI :8006,
+# SSH, API, consoles — to the OOB network ({{ config_firewall_node_mgmt_cidr }}). WAN
+# exposure of these services is denied by the DROP input policy.
+
+[OPTIONS]
+enable: 1
+policy_in: DROP
+policy_out: ACCEPT
+
+[RULES]
+# Management surfaces — OOB network only.
+{% for p in config_firewall_node_mgmt_ports %}
+IN ACCEPT -source {{ config_firewall_node_mgmt_cidr }} -p {{ p.proto }} -dport {{ p.port }}{% if p.comment is defined %} # {{ p.comment }}{% endif %}
+
+{% endfor %}
+{% if config_firewall_node_cluster_peers | length > 0 %}
+# Cluster / corosync links between nodes.
+{% for peer in config_firewall_node_cluster_peers %}
+IN ACCEPT -source {{ peer }} -p udp -dport 5405:5412 # corosync
+IN ACCEPT -source {{ peer }} -p tcp -dport 22 # node-to-node SSH/migration
+{% endfor %}
+{% endif %}

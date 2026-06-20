@@ -1,0 +1,19 @@
+# {{ ansible_managed }}
+#
+# Authelia forward-auth subrequest endpoint (managed by service_reverse_proxy).
+#
+# Include this ONCE in a proxy host's "Advanced" config (server scope). It
+# defines the internal /authelia location that nginx's auth_request calls to
+# ask Authelia whether the session is authenticated + authorized.
+
+location /authelia {
+    internal;
+    proxy_pass {{ service_reverse_proxy_authelia_internal_url }}/api/authz/auth-request;
+
+    proxy_set_header X-Original-Method $request_method;
+    proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header Content-Length "";
+
+    proxy_pass_request_body off;
+}

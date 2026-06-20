@@ -1,0 +1,26 @@
+---
+# Verification for the in-guest nftables baseline. Read-only: confirms the
+# inet filter table exists with a default-drop input policy.
+
+- name: Read back the baseline nftables table
+  ansible.builtin.command:
+    cmd: nft list table inet filter
+  register: config_firewall_table
+  changed_when: false
+  failed_when: false
+
+- name: Assert the input chain default policy is drop
+  ansible.builtin.assert:
+    that:
+      - config_firewall_table.rc == 0
+      - "'hook input' in config_firewall_table.stdout"
+      - "'policy drop' in config_firewall_table.stdout"
+    fail_msg: >-
+      The inet filter table is missing or its input policy is not drop.
+      nft rc={{ config_firewall_table.rc }}.
+    quiet: true
+
+- name: Summarise baseline firewall verification
+  ansible.builtin.debug:
+    msg:
+      - "firewall input drop: {{ (config_firewall_table.rc | default(1)) == 0 }}"

@@ -1,0 +1,33 @@
+---
+# tasks file for config_basic
+#
+# The universal bring-up every host gets: SSH keys, a Python interpreter for
+# Ansible modules, an initial package refresh, and always-on unattended
+# SECURITY upgrades. Deliberately implementation-light and reusable — host
+# hardening (config_hardening), time (config_time), firewalling
+# (config_firewall) and logging (config_logging) are separate roles.
+#
+# Credential handling differs by guest type, so that piece routes out to a
+# per-platform task file; everything else is universal.
+
+- name: Apply per-platform credentials
+  ansible.builtin.include_tasks: credentials.yml
+
+- name: Update apt package lists and upgrade installed packages
+  ansible.builtin.apt:
+    name: "*"
+    update_cache: true
+    state: latest
+
+- name: Ensure Python is installed and available
+  ansible.builtin.apt:
+    name:
+      - python3
+    state: latest
+
+# Unattended SECURITY upgrades are always-on fleet-wide (operator decision):
+# close the gap between a CVE fix landing and the next manual converge,
+# without pulling surprise feature updates (that stays the operator-driven
+# `apt name=* state=latest` above).
+- name: Configure unattended security upgrades
+  ansible.builtin.include_tasks: upgrades.yml

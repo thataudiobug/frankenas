@@ -1,8 +1,17 @@
-"""Discover and read ``*_catalog`` variables from ``group_vars/``.
+"""Discover and read ``*_catalog`` variables.
 
-A catalog is any top-level mapping key in a ``group_vars/<group>/*.yml`` file
-whose name ends in ``_catalog``. The tool surfaces these dynamically so new
-catalogs work without code changes.
+Catalogs live in two places:
+
+* ``group_vars/`` — cross-cutting catalogs that apply regardless of which
+  roles run (e.g. ``users_catalog``, the ``droplet_bind_catalog`` reference
+  table). Discovered by :func:`load_catalogs_for_groups`.
+* a role's ``defaults/`` or ``vars/`` — role-owned catalogs that only apply
+  when that role runs against the host (e.g. ``firewall_catalog`` in
+  ``config_firewall``, ``compute_catalog`` in ``provision_proxmox``).
+  Discovered by :func:`load_catalogs_for_roles`.
+
+A catalog is any top-level mapping key whose name ends in ``_catalog``. The
+tool surfaces these dynamically so new catalogs work without code changes.
 
 Each catalog declares its own selection behaviour with a **marker comment**
 written directly on the catalog key — the data describes itself, with no
@@ -236,3 +245,63 @@ def find_catalog(catalogs: Iterable[Catalog], name: str) -> Catalog | None:
         if c.name == name:
             return c
     return None
+
+
+def _iter_role_var_files(role_dir: Path) -> Iterable[Path]:
+    """YAML files under a role's ``defaults/`` and ``vars/``.
+
+    Ansible accepts either ``defaults/main.yml`` or a ``defaults/main/``
+    directory whose files are all auto-loaded (same for ``vars/``). We scan
+    both forms so a catalog can live in its own file (e.g.
+    ``defaults/main/docker_catalog.yml``).
+    """
+    for sub in ("defaults", "vars"):
+        base = role_dir / sub
+        main_file = base / "main.yml"
+        if main_file.is_file():
+            yield main_file
+        main_dir = base / "main"
+        if main_dir.is_dir():
+            for p in sorted(main_dir.iterdir()):
+                if p.suffix in {".yml", ".yaml"} and p.is_file():
+                    yield p
+
+
+def load_catalogs_for_roles(
+    roles_dir: Path,
+    roles: Iterable[str],
+) -> list[Catalog]:
+    """Return every selectable ``*_catalog`` defined in the listed roles.
+
+    Mirrors :func:`load_catalogs_for_groups` but scans role ``defaults``/
+    ``vars`` instead of ``group_vars``. The catalog's ``group`` field is set
+    to ``role:<name>`` so the UI can show provenance. Reference-only catalogs
+    are skipped.
+    """
+    seen: dict[tuple[str, str], Catalog] = {}
+    for role in roles:
+        role_dir = roles_dir / role
+        if not role_dir.is_dir():
+            continue
+        for fpath in _iter_role_var_files(role_dir):
+            data = yaml_io.load(fpath)
+            if not isinstance(data, dict):
+                continue
+            for key, value in data.items():
+                if not (isinstance(key, str) and key.endswith("_catalog")):
+                    continue
+                if not isinstance(value, dict):
+                    continue
+                spec = classify_catalog(key, value)
+                if spec.reference_only:
+                    continue
+                cat = Catalog(
+                    name=key,
+                    enabled_var=spec.enabled_var,
+                    kind=spec.kind,
+                    group=f"role:{role}",
+                    source_file=fpath,
+                    entries=dict(value),
+                )
+                seen.setdefault((role, key), cat)
+    return [seen[k] for k in sorted(seen.keys())]

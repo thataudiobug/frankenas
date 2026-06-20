@@ -1,0 +1,26 @@
+// {{ ansible_managed }}
+//
+// Managed by config_basic. Applies SECURITY origins only — feature updates
+// stay operator-driven (see config_basic). Edit the role vars, not this file.
+
+Unattended-Upgrade::Allowed-Origins {
+{% for origin in config_basic_upgrade_origins %}
+    "{{ origin }}";
+{% endfor %}
+};
+
+// Never auto-touch these even if a matching origin offers them.
+Unattended-Upgrade::Package-Blacklist {
+};
+
+// Clean up obsolete deps/kernels so /boot doesn't fill on small guests.
+Unattended-Upgrade::Remove-Unused-Dependencies "{{ config_basic_upgrade_remove_unused_dependencies | bool | lower }}";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "{{ config_basic_upgrade_remove_unused_dependencies | bool | lower }}";
+
+// Reboot handling. Off by default: a host should not vanish unexpectedly.
+Unattended-Upgrade::Automatic-Reboot "{{ config_basic_upgrade_automatic_reboot | bool | lower }}";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ config_basic_upgrade_automatic_reboot_time }}";
+
+// Keep the system aware of failed runs without emailing anywhere.
+Unattended-Upgrade::SyslogEnable "true";

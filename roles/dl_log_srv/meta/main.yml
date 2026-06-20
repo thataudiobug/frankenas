@@ -1,8 +1,0 @@
-galaxy_info:
-  author: frankenas
-  description: Central log-aggregation server config (Loki + Grafana) on bind storage
-  license: MIT
-  min_ansible_version: "2.1"
-  galaxy_tags: []
-
-dependencies: []

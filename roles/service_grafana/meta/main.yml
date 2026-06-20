@@ -1,0 +1,8 @@
+galaxy_info:
+  author: frankenas
+  description: Grafana config + datasource provisioning (reusable; wires Loki today)
+  license: MIT
+  min_ansible_version: "2.1"
+  galaxy_tags: []
+
+dependencies: []

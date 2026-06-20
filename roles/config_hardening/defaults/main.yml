@@ -1,0 +1,56 @@
+---
+# defaults file for config_hardening
+#
+# Host lockdown — currently SSH hardening. Split out of the old co_hst_sec;
+# firewall, time, and upgrade tunables moved to config_firewall, config_time,
+# and config_basic respectively.
+
+# =====================================================================
+# Master switches
+# =====================================================================
+config_hardening_ssh_harden_enabled: true
+
+# When true, re-check the applied hardening at the end of the run (and the
+# role can be invoked stand-alone for verification). Off by default to keep
+# converges fast.
+config_hardening_verify: false
+
+# =====================================================================
+# Management network — MUST stay reachable.
+# =====================================================================
+#
+# The OOB management space C2 reaches hosts over for SSH / Ansible. Used by
+# the no-lockout preflight. An empty or wrong value risks lockout.
+config_hardening_mgmt_cidr: "10.128.0.0/9"
+
+# Extra source CIDRs allowed to reach SSH (e.g. a secondary admin net).
+config_hardening_admin_extra_cidrs: []
+
+# =====================================================================
+# SSH hardening
+# =====================================================================
+#
+# Written as a drop-in under /etc/ssh/sshd_config.d/ (Ubuntu 24.04 includes
+# that dir) so we never rewrite the distro file. Validated with `sshd -t`
+# before the service is reloaded.
+config_hardening_ssh_dropin_filename: "10-frankenas-hardening.conf"
+
+# prohibit-password keeps key-based root login working while refusing
+# password auth. Set to "no" on hosts with a real non-root admin user.
+config_hardening_ssh_permit_root_login: "prohibit-password"
+
+# Key-only auth — the whole fleet is provisioned with keys.
+config_hardening_ssh_password_authentication: "no"
+config_hardening_ssh_kbd_interactive_authentication: "no"
+config_hardening_ssh_pubkey_authentication: "yes"
+
+# Misc hardening knobs. Conservative; override per host if needed.
+config_hardening_ssh_max_auth_tries: 3
+config_hardening_ssh_login_grace_time: 30
+config_hardening_ssh_x11_forwarding: "no"
+config_hardening_ssh_allow_agent_forwarding: "no"
+config_hardening_ssh_client_alive_interval: 300
+config_hardening_ssh_client_alive_count_max: 2
+
+# Service to reload after a validated config change. Debian/Ubuntu use "ssh".
+config_hardening_ssh_service_name: "ssh"

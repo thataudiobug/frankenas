@@ -1,0 +1,29 @@
+// {{ ansible_managed }}
+//
+// Docker container log source for Grafana Alloy on {{ inventory_hostname }}.
+// Contributed by the `docker` role (not config_logging) so docker concerns stay
+// out of non-docker hosts. Merged with the base Alloy config; references the
+// `loki.write.central` sink defined there.
+
+discovery.docker "local" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker" {
+  targets = discovery.docker.local.targets
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker.output
+  forward_to = [loki.write.central.receiver]
+  labels     = {
+    job  = "docker",
+    host = "{{ inventory_hostname }}",
+  }
+}

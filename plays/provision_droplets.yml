@@ -3,4 +3,4 @@
   gather_facts: true
   connection: local
   roles:
-    - role: pve_dl
+    - role: provision_proxmox

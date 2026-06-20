@@ -1,0 +1,52 @@
+---
+# Time synchronisation (chrony).
+#
+# Correlating logs across hosts is only meaningful if their clocks agree, so
+# this is a prerequisite for the log-aggregation work, not a nice-to-have.
+#
+# CRITICAL guest/baremetal distinction: an unprivileged LXC container CANNOT
+# set the system clock (it lacks CAP_SYS_TIME) — it transparently inherits
+# the PVE host's clock. Running chrony inside one just spews "Could not step
+# system clock" errors and fixes nothing. So:
+#
+#   * baremetal + qemu VMs  -> install and run chrony (they own their clock)
+#   * lxc guests            -> no-op; the host keeps them in sync
+#
+# Mirrors config_basic's existing virtualization_type branching.
+
+- name: Determine whether this host owns its own clock
+  ansible.builtin.set_fact:
+    _co_owns_clock: "{{ ansible_facts['virtualization_type'] | default('') != 'lxc' }}"
+
+- name: Note that LXC guests inherit the host clock (chrony skipped)
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} is an LXC container — it inherits the PVE
+      host's clock and cannot run chrony. Ensure the PVE node (baremetal)
+      runs chrony so all its guests stay correlated.
+  when: not _co_owns_clock
+
+- name: Configure chrony on hosts that own their clock
+  when: _co_owns_clock | bool
+  block:
+    - name: Install chrony
+      ansible.builtin.apt:
+        name:
+          - chrony
+        state: present
+        update_cache: true
+
+    - name: Deploy chrony configuration
+      ansible.builtin.template:
+        src: chrony.conf.j2
+        dest: /etc/chrony/chrony.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart chrony
+
+    - name: Enable and start chrony
+      ansible.builtin.systemd:
+        name: "{{ config_time_chrony_service_name }}"
+        enabled: true
+        state: started

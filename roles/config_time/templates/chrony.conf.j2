@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+#
+# chrony config for {{ inventory_hostname }} (managed by config_time).
+# Keeps the clock synced so cross-host log correlation is trustworthy.
+
+{% for src in config_time_chrony_servers %}
+{{ 'pool' if src.pool | default(false) else 'server' }} {{ src.address }} iburst
+{% endfor %}
+
+# Record the rate at which the system clock gains/loses time.
+driftfile /var/lib/chrony/chrony.drift
+
+# Allow the clock to be stepped (rather than slewed) in the first few
+# updates after start, if the offset is large.
+makestep 1.0 3
+
+# Sync the RTC to system time (harmless on VMs without an RTC).
+rtcsync

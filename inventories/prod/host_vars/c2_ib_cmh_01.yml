@@ -24,7 +24,12 @@ dns_enabled: public
 network_enabled:
   wan:
   oob:
-    ip: "10.128.0.3"
+    ip: "10.128.0.3/9"
+
+# DNS: config_pinned_dns publishes this OOB ip on the DNS server (derived from
+# network_enabled.oob.ip, CIDR stripped). Note C2 also keeps ansible_host as
+# the literal IP (recovery path), so it's reachable even before its FQDN
+# resolves.
 
 # Log shipping: journald only (the always-on 'base' profile) — captures
 # Ansible runs, sshd, systemd. Listed explicitly for clarity; [] = base-only.

@@ -1,0 +1,12 @@
+---
+# handlers file for config_pinned_dns
+#
+# Restart runs on the DNS server (the block that notifies this handler is
+# delegated there), so the new drop-in is loaded. Named distinctly from
+# service_dns's handler to avoid any cross-role notify ambiguity.
+- name: Restart dnsmasq (pinned dns)
+  ansible.builtin.systemd:
+    name: dnsmasq
+    state: restarted
+    daemon_reload: true
+  delegate_to: "{{ config_pinned_dns_target }}"

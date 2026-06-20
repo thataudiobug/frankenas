@@ -22,9 +22,9 @@ import asyncio
 import fcntl
 import os
 import struct
-import tempfile
 import termios
 import time
+from datetime import datetime
 from pathlib import Path
 
 from rich.text import Text
@@ -681,29 +681,32 @@ class _RunOutputScreen(ModalScreen[None]):
         )
 
     def _save_log(self) -> None:
-        """Dump the plain-text mirror of the run output to a tempfile."""
+        """Dump the plain-text mirror of the run output to a dated file."""
         if not self._plain_output:
             self.notify("Nothing to save yet", severity="warning")
             return
+        # Date-coded name: finc-<play>-<YYYYMMDD-HHMMSS>.log — human-readable
+        # and naturally sorts chronologically. If a file with the same name
+        # already exists (same play saved twice within a second), append a
+        # counter so we never clobber an earlier save.
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        base = f"finc-{self.play.name}-{stamp}"
+        target = Path.home() / f"{base}.log"
+        counter = 1
+        while target.exists():
+            target = Path.home() / f"{base}-{counter}.log"
+            counter += 1
         try:
-            fd, name = tempfile.mkstemp(
-                prefix=f"finc-{self.play.name}-",
-                suffix=".log",
-                dir=str(Path.home()),
-            )
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                # ``Path.home()`` keeps the file in a familiar place;
-                # mode 0600 isn't strictly needed (no secrets in this
-                # output beyond what the user just saw on screen) but
-                # match the rest of the app's tempfile conventions.
-                fh.write("\n".join(self._plain_output))
-                fh.write("\n")
-            os.chmod(name, 0o600)
+            # mode 0600 isn't strictly needed (no secrets in this output
+            # beyond what the user just saw on screen) but matches the rest
+            # of the app's file conventions.
+            target.write_text("\n".join(self._plain_output) + "\n", encoding="utf-8")
+            os.chmod(target, 0o600)
         except OSError as exc:
             self.notify(f"Couldn't save log: {exc}", severity="error", timeout=5)
             return
         # 6-second timeout so the user has time to read the path.
-        self.notify(f"Saved to {name}", timeout=6)
+        self.notify(f"Saved to {target}", timeout=6)
 
     def _sanitised_env(self) -> dict[str, str]:
         """Override colour and buffering settings without losing the user's env.

@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# IPv6 is disabled on this host (config_vpn_client_disable_ipv6) and the kill switch drops
+# v6 egress, but DNS still returns AAAA records. Without this, apt picks an
+# IPv6 address first and stalls/fails instead of falling back to IPv4.
+Acquire::ForceIPv4 "true";

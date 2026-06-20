@@ -1,56 +1,10 @@
 ---
 # Fleet-wide defaults (apply to every host unless overridden).
-
-# Log source profiles for co_hst_log (catalog -> enabled framework). Every
-# host ships journald via the always-on 'base' profile; a host adds extras
-# by listing them in `log_sources_enabled` (host_var), e.g.:
 #
-#   log_sources_enabled: [docker]      # docker hosts
-#   log_sources_enabled: [npm]         # the reverse proxy
-#   log_sources_enabled: [pve]         # the Proxmox node
+# Role-specific catalogs moved into their owning roles' defaults in Phase 3:
+#   * log_sources_catalog   -> roles/config_logging/defaults
+#   * authelia_access_catalog -> roles/service_authelia/defaults
 #
-# This lives in group_vars/all (not the role defaults) so it's discoverable
-# by the catalog->enabled convention and tweakable without touching the role.
-log_sources_catalog:
-  base:
-    journal: true
-  docker:
-    journal: true
-    docker: true
-  npm:
-    journal: true
-    files:
-      - { path: "/mnt/config/npm/data/logs/*_access.log", job: "npm-access" }
-      - { path: "/mnt/config/npm/data/logs/*_error.log", job: "npm-error" }
-  pve:
-    journal: true
-    files:
-      - { path: "/var/log/pve/tasks/**/*", job: "pve-tasks" }
-
-# Authelia access-control rules (consumed by dl_auth_srv). Evaluated
-# top-to-bottom, FIRST MATCH WINS, against default_policy: deny. Each rule:
-#   domain  (required)  the protected subdomain
-#   subject             user:<name> or group:<name> (omit = any authed user)
-#   policy              bypass | one_factor | two_factor | deny
-#   resources/networks  optional path-regex / source-CIDR narrowing
-#
-# Factor level is a property of the RESOURCE, not the user: a user only ever
-# sees TOTP if a rule they reach is two_factor. Privileged apps below force
-# two_factor; media apps are one_factor (password only).
-authelia_access_catalog:
-  # Auth portal itself must always be reachable to log in.
-  - { domain: 'auth.frankenas.com', policy: 'bypass' }
-
-  # Media: password only, media group. No TOTP ever prompted.
-  - { domain: 'jellyfin.frankenas.com', subject: 'group:media', policy: 'one_factor' }
-  - { domain: 'ombi.frankenas.com', subject: 'group:media', policy: 'one_factor' }
-
-  # *arr / download admin apps: admins only, TOTP forced.
-  - { domain: 'radarr.frankenas.com', subject: 'group:admins', policy: 'two_factor' }
-  - { domain: 'sonarr.frankenas.com', subject: 'group:admins', policy: 'two_factor' }
-  - { domain: 'lidarr.frankenas.com', subject: 'group:admins', policy: 'two_factor' }
-  - { domain: 'prowlarr.frankenas.com', subject: 'group:admins', policy: 'two_factor' }
-  - { domain: 'qbittorrent.frankenas.com', subject: 'group:admins', policy: 'two_factor' }
-
-  # Nextcloud: any authenticated user, password only (it has its own 2FA).
-  - { domain: 'nextcloud.frankenas.com', subject: 'group:media', policy: 'one_factor' }
+# Genuinely cross-cutting catalogs (users_catalog, api_catalog,
+# droplet_bind_catalog) remain in group_vars because they're referenced from
+# always-in-scope contexts and by multiple roles.

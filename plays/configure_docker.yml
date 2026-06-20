@@ -1,6 +1,0 @@
-# Configure docker and it's containers on hosts
-- name: Configure docker hosts
-  hosts: docker
-  gather_facts: true
-  roles:
-    - docker

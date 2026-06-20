@@ -22,8 +22,13 @@ users_enabled: [casey, robot]
 
 network_enabled:
   wan:        # apt + container image pulls
+    ip: "192.168.1.131/24"
+    gw: "192.168.1.254"
   oob:
-    ip: "10.128.0.4"          # reserved identity anchor
+
+# DNS: config_pinned_dns publishes this OOB ip as a host-record on the DNS
+# server at build time (orthax doesn't DHCP). Derived from
+# network_enabled.oob.ip above (CIDR stripped) — single source of truth.
 
 # LLDAP + Authelia + Redis state all live on the config bind.
 droplet_bind_enabled:
@@ -41,18 +46,17 @@ firewall_enabled: identity
 log_sources_enabled: [docker]
 
 # -- Secrets: OVERRIDE FROM VAULT --------------------------------------
-# dl_auth_srv + dl_ldap_srv refuse to run with the placeholders. Wire these
+# service_authelia + service_lldap refuse to run with the placeholders. Wire these
 # to vault_* entries (see group_vars/all/vault.yml):
 #
 # Authelia:
-# auth_srv_session_secret:         "{{ vault_authelia_session_secret }}"
-# auth_srv_storage_encryption_key: "{{ vault_authelia_storage_key }}"
-# auth_srv_jwt_secret:             "{{ vault_authelia_jwt_secret }}"
-# auth_srv_redis_password:         "{{ vault_authelia_redis_password }}"
-# auth_srv_ldap_bind_password:     "{{ vault_lldap_bind_password }}"   # == ldap_srv_bind_password
-#
+service_authelia_session_secret: "{{ vault_authelia_session_secret }}"
+service_authelia_storage_encryption_key: "{{ vault_authelia_storage_key }}"
+service_authelia_jwt_secret: "{{ vault_authelia_jwt_secret }}"
+service_authelia_redis_password: "{{ vault_authelia_redis_password }}"
+service_authelia_ldap_bind_password: "{{ vault_lldap_bind_password }}"   # == service_lldap_bind_password
 # LLDAP:
-# ldap_srv_jwt_secret:             "{{ vault_lldap_jwt_secret }}"
-# ldap_srv_key_seed:               "{{ vault_lldap_key_seed }}"
-# ldap_srv_admin_password:         "{{ vault_lldap_admin_password }}"
-# ldap_srv_bind_password:          "{{ vault_lldap_bind_password }}"   # == auth_srv_ldap_bind_password
+service_lldap_jwt_secret: "{{ vault_lldap_jwt_secret }}"
+service_lldap_key_seed: "{{ vault_lldap_key_seed }}"
+service_lldap_admin_password: "{{ vault_lldap_admin_password }}"
+service_lldap_bind_password: "{{ vault_lldap_bind_password }}"   # == service_authelia_ldap_bind_password

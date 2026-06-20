@@ -1,0 +1,67 @@
+// {{ ansible_managed }}
+//
+// Grafana Alloy log shipping for {{ inventory_hostname }} (managed by
+// config_logging). Ships to Loki on Mollymauk over OOB. Edit the role vars /
+// log_sources_catalog, not this file.
+
+// ---------------------------------------------------------------------
+// Sink: the central Loki on Mollymauk (OOB only).
+// ---------------------------------------------------------------------
+loki.write "central" {
+  endpoint {
+    url = "{{ config_logging_loki_url }}"
+  }
+  // Labels attached to every stream from this host.
+  external_labels = {
+    host = "{{ inventory_hostname }}",
+{% for k, v in config_logging_extra_labels.items() %}
+    {{ k }} = "{{ v }}",
+{% endfor %}
+  }
+}
+
+{% if _log_journal | bool %}
+// ---------------------------------------------------------------------
+// Source: systemd journal (sshd, dnsmasq, kernel, all units).
+// ---------------------------------------------------------------------
+loki.source.journal "system" {
+  forward_to    = [loki.write.central.receiver]
+  max_age       = "12h"
+  labels        = {
+    job  = "journal",
+    host = "{{ inventory_hostname }}",
+  }
+  // Promote useful journal fields to labels for filtering in Grafana.
+  relabel_rules = discovery.relabel.journal.rules
+}
+
+discovery.relabel "journal" {
+  targets = []
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+{% endif %}
+
+{% if _log_files | length > 0 %}
+// ---------------------------------------------------------------------
+// Source: explicit file paths (e.g. NPM proxy logs, PVE task logs).
+// ---------------------------------------------------------------------
+local.file_match "files" {
+  path_targets = [
+{% for f in _log_files %}
+    {"__path__" = "{{ f.path }}", "job" = "{{ f.job | default('file') }}", "host" = "{{ inventory_hostname }}"},
+{% endfor %}
+  ]
+}
+
+loki.source.file "files" {
+  targets    = local.file_match.files.targets
+  forward_to = [loki.write.central.receiver]
+}
+{% endif %}

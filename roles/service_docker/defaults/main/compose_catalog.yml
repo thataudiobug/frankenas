@@ -1,0 +1,80 @@
+---
+# Docker Compose stack catalog + VPN provider catalog (moved here from
+# group_vars/docker and group_vars/vpn_clients in Phase 3).
+#
+# A host opts into stacks with `compose_enabled: [piracy, ...]` in host_vars;
+# frankinception discovers the catalogs via the `# pick many` / `# pick one`
+# markers below.
+
+compose_catalog:  # pick many
+  piracy:
+    template: "piracy.yml.j2"
+    env: "piracy.env.j2"
+    project: "piracy"
+
+# -- Piracy stack data -------------------------------------------------
+# The arr apps rendered into the piracy compose template. Each: name, image,
+# web port, and optional extra volumes (beyond the standard /config bind).
+# Add/remove apps here — no template edits needed. (# reference: interpolated
+# by the piracy template, not a per-host selection.)
+piracy_arr_apps:  # reference
+  - name: prowlarr
+    image: "linuxserver/prowlarr:latest"
+    port: 9696
+  - name: sonarr
+    image: "linuxserver/sonarr:latest"
+    port: 8989
+    extra_volumes:
+      - "{{ droplet_bind_catalog.media.mnt }}/tv:/tv"
+      - "{{ droplet_bind_catalog.media.mnt }}/downloads:/downloads"
+  - name: radarr
+    image: "linuxserver/radarr:latest"
+    port: 7878
+    extra_volumes:
+      - "{{ droplet_bind_catalog.media.mnt }}/movies:/movies"
+      - "{{ droplet_bind_catalog.media.mnt }}/downloads:/downloads"
+  - name: lidarr
+    image: "linuxserver/lidarr:latest"
+    port: 8686
+    extra_volumes:
+      - "{{ droplet_bind_catalog.media.mnt }}/music:/music"
+      - "{{ droplet_bind_catalog.media.mnt }}/downloads:/downloads"
+
+# -- Gluetun VPN provider catalog --------------------------------------
+# Selectable VPN provider/server for the gluetun sidecar. A host picks one
+# with `vpn_provider_enabled: <key>`. An entry IS the gluetun provider env
+# (env var names are gluetun's own). Secrets come from the vault; the
+# plaintext never sits here. provision_proxmox writes a custom .ovpn to the
+# config bind at build for `custom` providers.
+vpn_provider_catalog:  # pick one
+  ca_toronto:
+    # 'custom' = bring-your-own OpenVPN config. gluetun needs the .ovpn for a
+    # custom provider; provision_proxmox writes `custom_ovpn` to
+    # <config bind>/gluetun/custom.ovpn at build time, where gluetun loads it.
+    VPN_SERVICE_PROVIDER: "custom"
+    VPN_TYPE: "openvpn"
+    OPENVPN_USER: "{{ vault_ca_toronto_user }}"
+    OPENVPN_PASSWORD: "{{ vault_ca_toronto_pass }}"
+    OPENVPN_CUSTOM_CONFIG: "/gluetun/custom.ovpn"
+    # Full .ovpn text (vault). Consumed by provision_proxmox's config-write
+    # task, NOT passed to gluetun as env — it's stripped out before the merge.
+    custom_ovpn: "{{ vault_ca_toronto_ovpn }}"
+
+  # Private Internet Access — a BUILT-IN gluetun provider. gluetun ships
+  # PIA's server list, so there's NO .ovpn file. Just credentials + a region.
+  pia:
+    VPN_SERVICE_PROVIDER: "private internet access"
+    VPN_TYPE: "openvpn"
+    OPENVPN_USER: "{{ vault_pia_user }}"
+    OPENVPN_PASSWORD: "{{ vault_pia_pass }}"
+    SERVER_REGIONS: "{{ pia_server_regions | default('CA Toronto') }}"
+    VPN_PORT_FORWARDING: "{{ pia_port_forwarding | default('off') }}"
+
+  # Example of a built-in provider (no .ovpn needed). Uncomment + add vault
+  # creds to use:
+  # mullvad_se:
+  #   VPN_SERVICE_PROVIDER: "mullvad"
+  #   VPN_TYPE: "wireguard"
+  #   WIREGUARD_PRIVATE_KEY: "{{ vault_mullvad_wg_key }}"
+  #   WIREGUARD_ADDRESSES: "{{ vault_mullvad_wg_addr }}"
+  #   SERVER_CITIES: "Stockholm"

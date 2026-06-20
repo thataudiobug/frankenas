@@ -1,0 +1,8 @@
+galaxy_info:
+  author: frankenas
+  description: Time synchronisation (chrony) — no-ops inside LXC guests
+  license: MIT
+  min_ansible_version: "2.1"
+  galaxy_tags: []
+
+dependencies: []

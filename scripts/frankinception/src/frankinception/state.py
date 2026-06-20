@@ -51,18 +51,47 @@ class AppState:
 
     def catalogs_for(self, host: str) -> list[Catalog]:
         groups = self.inventory.all_groups_of(host)
-        return load_catalogs_for_groups(self.layout.group_vars_dir, groups)
+        # Catalogs come from two places now: cross-cutting ones still in
+        # group_vars (users, binds, etc.) and role-owned ones in each role's
+        # defaults/vars. Resolve the roles that run against this host (via the
+        # plays + include_role/meta deps), then merge both catalog sources.
+        from .catalogs import load_catalogs_for_roles
+        from .roles import roles_for_host
+
+        group_cats = load_catalogs_for_groups(self.layout.group_vars_dir, groups)
+        roles = roles_for_host(groups, self.layout.plays_dir, self.layout.roles_dir)
+        role_cats = load_catalogs_for_roles(self.layout.roles_dir, sorted(roles))
+        # group_vars wins if the same catalog name appears in both (shouldn't
+        # happen after the Phase 3 move, but keep group_vars authoritative).
+        by_name: dict[str, Catalog] = {}
+        for cat in role_cats:
+            by_name.setdefault(cat.name, cat)
+        for cat in group_cats:
+            by_name[cat.name] = cat
+        return [by_name[k] for k in sorted(by_name.keys())]
 
     # ---- docker catalog ---------------------------------------------
 
     def _load_docker_catalog(self) -> None:
-        path = self.layout.group_vars_dir / "docker" / "docker_catalog.yml"
-        if path.is_file():
-            self.docker_catalog_path = path
-            self.docker_catalog = yaml_io.load(path) or {}
-        else:
-            self.docker_catalog_path = path
-            self.docker_catalog = None
+        # The docker container/group catalog moved into the service_docker
+        # role in Phase 3. Prefer that location; fall back to the legacy
+        # group_vars path for older inventories.
+        candidates = [
+            self.layout.roles_dir
+            / "service_docker"
+            / "defaults"
+            / "main"
+            / "docker_catalog.yml",
+            self.layout.group_vars_dir / "docker" / "docker_catalog.yml",
+        ]
+        for path in candidates:
+            if path.is_file():
+                self.docker_catalog_path = path
+                self.docker_catalog = yaml_io.load(path) or {}
+                return
+        # Nothing on disk yet — default to the role location for new writes.
+        self.docker_catalog_path = candidates[0]
+        self.docker_catalog = None
 
     def ensure_docker_catalog(self) -> dict:
         """Get the docker catalog doc, creating an empty one if missing."""
@@ -164,28 +193,29 @@ class AppState:
     # ---- bind catalog -----------------------------------------------
 
     def _load_bind_catalog(self) -> None:
-        # The catalog lives in ``group_vars/all/mounts_catalog.yml`` per repo
-        # convention but we'll search in case the user moved it.
+        # The bind catalog (``droplet_bind_catalog``) is a cross-cutting
+        # reference table that stays in group_vars. Search for it so we're
+        # robust to which group_vars file holds it.
         for fpath in self.layout.group_vars_dir.rglob("*.y*ml"):
             data = yaml_io.load(fpath)
-            if isinstance(data, dict) and "docker_bind_catalog" in data:
+            if isinstance(data, dict) and "droplet_bind_catalog" in data:
                 self.bind_catalog_path = fpath
                 self.bind_catalog_root = data
                 return
         # Default location if missing.
         self.bind_catalog_path = (
-            self.layout.group_vars_dir / "all" / "mounts_catalog.yml"
+            self.layout.group_vars_dir / "droplets" / "droplet_binds_catalog.yml"
         )
         self.bind_catalog_root = None
 
     def bind_catalog(self) -> dict:
         if self.bind_catalog_root is None:
             self.bind_catalog_root = yaml_io.empty_map()
-            self.bind_catalog_root["docker_bind_catalog"] = yaml_io.empty_map()
-        existing = self.bind_catalog_root.get("docker_bind_catalog")
+            self.bind_catalog_root["droplet_bind_catalog"] = yaml_io.empty_map()
+        existing = self.bind_catalog_root.get("droplet_bind_catalog")
         if not isinstance(existing, dict):
-            self.bind_catalog_root["docker_bind_catalog"] = yaml_io.empty_map()
-        return self.bind_catalog_root["docker_bind_catalog"]
+            self.bind_catalog_root["droplet_bind_catalog"] = yaml_io.empty_map()
+        return self.bind_catalog_root["droplet_bind_catalog"]
 
     def save_bind_catalog(self) -> None:
         if self.bind_catalog_path is None or self.bind_catalog_root is None:

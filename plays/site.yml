@@ -1,0 +1,31 @@
+---
+# site.yml — top-level orchestrator. Runs every configuration play in a sane
+# order to build the whole inventory. Each imported play targets its own host
+# group, so a full run converges every device; use --limit to scope it.
+#
+#   ansible-playbook plays/site.yml
+#   ansible-playbook plays/site.yml --limit orthax
+#
+# Run with the vault available so service secrets resolve.
+
+# -- Core network services first (everything else resolves/anchors here) --
+- name: Configure DNS + DHCP (OOB anchor)
+  ansible.builtin.import_playbook: config_dns_srv.yml
+
+# -- Identity stack (other services may forward-auth against it) ----------
+- name: Deploy the identity server (LLDAP + Authelia + Redis)
+  ansible.builtin.import_playbook: config_auth_srv.yml
+
+# -- Observability --------------------------------------------------------
+- name: Deploy the central log server (Loki + Grafana)
+  ansible.builtin.import_playbook: config_log_srv.yml
+
+# -- Edge + application services ------------------------------------------
+- name: Configure the reverse proxy (NPM forward-auth)
+  ansible.builtin.import_playbook: config_reverse_proxy.yml
+
+- name: Deploy VPN-enabled docker hosts (arr stack)
+  ansible.builtin.import_playbook: config_piracy_ports.yml
+
+- name: Configure remaining docker hosts
+  ansible.builtin.import_playbook: config_docker.yml

@@ -51,42 +51,71 @@ def test_inventory_groups_for_real_hosts():
     hosts = inv.hosts()
     assert "port-tortuga" in hosts
     assert "test-port-01" in hosts
-    # port-tortuga is in qemu and docker, transitively in droplets, hosts_all,
-    # and datacenter.
+    # port-tortuga is in docker/piracy/vpn_clients and pct, transitively in
+    # droplets, hosts_all, and datacenter.
     groups = inv.all_groups_of("port-tortuga")
-    for expected in ("qemu", "docker", "droplets", "hosts_all", "datacenter"):
+    for expected in ("pct", "docker", "droplets", "hosts_all", "datacenter"):
         assert expected in groups, f"{expected} missing from {groups}"
 
 
 def test_catalog_discovery_for_docker_host():
+    """End-to-end catalog discovery for a real host after the Phase 3 move.
+
+    Catalogs now live in role defaults/vars, reachable via the plays that
+    target the host's groups (plus include_role/meta deps). A docker+pct host
+    like test-port-01 should see the provisioning, firewall, docker, and
+    logging catalogs, sourced from their owning roles.
+    """
+    from frankinception.catalogs import load_catalogs_for_groups, load_catalogs_for_roles
+    from frankinception.roles import roles_for_host
+
     inv = Inventory.load(INVENTORY / "hosts.yml")
-    # test-port-01 is in pct (so it sees hardware_catalog) and docker.
     groups = inv.all_groups_of("test-port-01")
-    catalogs = load_catalogs_for_groups(INVENTORY / "group_vars", groups)
-    names = {c.name for c in catalogs}
-    # Sanity: a docker+pct host should see all the major *selectable* catalogs.
+
+    plays_dir = FRANKENAS / "plays"
+    roles_dir = FRANKENAS / "roles"
+    roles = roles_for_host(groups, plays_dir, roles_dir)
+    # config_docker.yml targets the docker group with service_docker;
+    # provision_droplets.yml targets droplets with provision_proxmox, which
+    # include_roles config_firewall.
+    assert "service_docker" in roles
+    assert "provision_proxmox" in roles
+    assert "config_firewall" in roles, f"config_firewall not reached: {sorted(roles)}"
+
+    group_cats = {c.name for c in load_catalogs_for_groups(INVENTORY / "group_vars", groups)}
+    role_cats = {c.name for c in load_catalogs_for_roles(roles_dir, sorted(roles))}
+    names = group_cats | role_cats
+
     expected = {
-        "docker_containers_catalog",
-        "docker_groups_catalog",
-        "compute_catalog",
-        "storage_catalog",
-        "network_catalog",
-        "users_catalog",
+        "docker_containers_catalog",   # service_docker
+        "docker_groups_catalog",       # service_docker
+        "compute_catalog",             # provision_proxmox
+        "storage_catalog",             # provision_proxmox
+        "network_catalog",             # provision_proxmox
+        "firewall_catalog",            # config_firewall (included)
+        "users_catalog",               # group_vars/all (cross-cutting, stays)
+        "droplet_bind_catalog",        # group_vars/droplets (host-selectable)
     }
     missing = expected - names
     assert not missing, f"missing catalogs: {missing}"
-    # Reference-marked catalogs (interpolated directly by plays) must NOT be
-    # surfaced as host-editable pickers.
-    assert "docker_bind_catalog" not in names
+
+    # Reference-marked catalogs (interpolated directly, not per-host
+    # selections) must NOT be surfaced as host-editable pickers.
     assert "api_catalog" not in names
+    assert "authelia_access_catalog" not in names
+
     # Selection kinds come from the marker comments in the catalog files.
-    by_name = {c.name: c for c in catalogs}
+    by_name = {
+        c.name: c
+        for c in load_catalogs_for_roles(roles_dir, sorted(roles))
+    }
     assert by_name["docker_groups_catalog"].kind is CatalogKind.MULTI
     assert by_name["compute_catalog"].kind is CatalogKind.SINGLE
-    assert by_name["users_catalog"].kind is CatalogKind.MULTI
     assert by_name["network_catalog"].kind is CatalogKind.MULTI
     # Companion var is always <stem>_enabled.
     assert by_name["network_catalog"].enabled_var == "network_enabled"
+    # Provenance is recorded as role:<name>.
+    assert by_name["compute_catalog"].group == "role:provision_proxmox"
 
 
 def test_inventory_roundtrip_preserves_layout(tmp_path):
@@ -219,17 +248,17 @@ def test_parse_any_picks_compose_or_run():
 
 
 def _load_bind_catalog_from_inventory() -> dict:
-    """Find docker_bind_catalog wherever it lives under group_vars.
+    """Find droplet_bind_catalog wherever it lives under group_vars.
 
-    The file has lived in both group_vars/all/ and group_vars/docker/ across
-    revisions; searching makes the test robust to its location (mirrors how
-    AppState discovers it via rglob).
+    The bind catalog is a cross-cutting reference table that stays in
+    group_vars; searching makes the test robust to its exact location
+    (mirrors how AppState discovers it via rglob).
     """
     for path in (INVENTORY / "group_vars").rglob("*.y*ml"):
         data = yaml_io.load(path)
-        if isinstance(data, dict) and "docker_bind_catalog" in data:
-            return data["docker_bind_catalog"]
-    raise AssertionError("docker_bind_catalog not found anywhere under group_vars")
+        if isinstance(data, dict) and "droplet_bind_catalog" in data:
+            return data["droplet_bind_catalog"]
+    raise AssertionError("droplet_bind_catalog not found anywhere under group_vars")
 
 
 def test_bind_mapper_rewrites_against_real_catalog():
@@ -237,7 +266,7 @@ def test_bind_mapper_rewrites_against_real_catalog():
     m = match_volume("/Caleb/docker/configs/jellyfin/config:/config", bind_cat)
     assert m.bind_key == "config"
     assert m.rendered == (
-        "{{ docker_bind_catalog.config.mnt }}/jellyfin/config:/config"
+        "{{ droplet_bind_catalog.config.mnt }}/jellyfin/config:/config"
     )
 
     m_named = match_volume("mydata:/var/lib/data", bind_cat)
@@ -276,9 +305,12 @@ def test_plays_describe_falls_back_to_play_names(tmp_path):
 def test_list_playbooks_in_real_repo():
     plays = list_playbooks(FRANKENAS / "plays")
     by_name = {p.name: p for p in plays}
-    assert "docker_fleet_deploy" in by_name
-    # Two anonymous plays in docker_fleet_deploy → "Provision; Configure".
-    assert by_name["docker_fleet_deploy"].description == "Provision; Configure"
+    # site.yml is the top-level orchestrator and must be discoverable.
+    assert "site" in by_name
+    # config_docker.yml has a leading comment, so its description comes from
+    # that comment rather than play names.
+    assert "config_docker" in by_name
+    assert "docker" in by_name["config_docker"].description.lower()
 
 
 
@@ -890,3 +922,60 @@ def test_marker_case_insensitive_and_phrasing():
     for marker in ("# pick many", "# MULTI", "# multiple"):
         name, val = _catalog_value(f"bar_catalog:  {marker}\n  a:\n    x: 1\n")
         assert classify_catalog(name, val).kind is CatalogKind.MULTI
+
+
+# ---- role resolution (Phase 3 catalog relocation) --------------------------
+
+
+def test_build_play_role_map_reads_real_plays():
+    """Each play's hosts: token maps to the roles it names."""
+    from frankinception.roles import build_play_role_map
+
+    pm = build_play_role_map(FRANKENAS / "plays")
+    # config_docker.yml: hosts: docker -> service_docker
+    assert "service_docker" in pm.roles_for_groups(["docker"])
+    # config_dns_srv.yml: hosts: dns_srv -> service_dns
+    assert "service_dns" in pm.roles_for_groups(["dns_srv"])
+    # config_reverse_proxy.yml: hosts: reverse_proxy -> service_reverse_proxy
+    assert "service_reverse_proxy" in pm.roles_for_groups(["reverse_proxy"])
+
+
+def test_expand_roles_follows_include_role_and_meta_deps():
+    """provision_proxmox include_roles config_firewall (in pct.yml); service_loki
+    declares service_grafana as a meta dependency."""
+    from frankinception.roles import expand_roles
+
+    roles_dir = FRANKENAS / "roles"
+    expanded = expand_roles(["provision_proxmox"], roles_dir)
+    assert "config_firewall" in expanded, f"include_role not followed: {expanded}"
+
+    expanded2 = expand_roles(["service_loki"], roles_dir)
+    assert "service_grafana" in expanded2, f"meta dep not followed: {expanded2}"
+
+
+def test_roles_for_host_end_to_end():
+    """A host in dns_srv resolves service_dns and can reach its dns_srv_catalog."""
+    from frankinception.catalogs import load_catalogs_for_roles
+    from frankinception.roles import roles_for_host
+
+    inv = Inventory.load(INVENTORY / "hosts.yml")
+    groups = inv.all_groups_of("dns-oob")
+    roles = roles_for_host(groups, FRANKENAS / "plays", FRANKENAS / "roles")
+    assert "service_dns" in roles
+    cats = {c.name for c in load_catalogs_for_roles(FRANKENAS / "roles", sorted(roles))}
+    assert "dns_srv_catalog" in cats
+
+
+def test_load_catalogs_for_roles_handles_defaults_dir_form():
+    """service_docker stores its catalogs in defaults/main/*.yml (directory
+    form), which must be discovered the same as defaults/main.yml."""
+    from frankinception.catalogs import load_catalogs_for_roles
+
+    cats = {
+        c.name: c
+        for c in load_catalogs_for_roles(FRANKENAS / "roles", ["service_docker"])
+    }
+    assert "docker_containers_catalog" in cats
+    assert "compose_catalog" in cats
+    # piracy_arr_apps does not end in _catalog, so it is never surfaced.
+    assert "piracy_arr_apps" not in cats

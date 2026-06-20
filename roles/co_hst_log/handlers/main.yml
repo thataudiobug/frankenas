@@ -1,8 +1,0 @@
----
-# handlers file for co_hst_log
-
-- name: Restart alloy
-  ansible.builtin.systemd:
-    name: "{{ co_log_alloy_service_name }}"
-    state: restarted
-    daemon_reload: true

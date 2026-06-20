@@ -1,0 +1,50 @@
+---
+# Verification for config_firewall. Read-only: confirms the cluster master switch
+# and node policy are as intended and the ruleset compiles.
+
+- name: Read back cluster.fw
+  ansible.builtin.slurp:
+    src: /etc/pve/firewall/cluster.fw
+  register: _dc_readback
+
+- name: Assert the cluster firewall master switch matches intent
+  ansible.builtin.assert:
+    that:
+      - >-
+        ('enable: 1' in (_dc_readback.content | b64decode))
+        == (config_firewall_node_dc_firewall_enable | bool)
+    fail_msg: "cluster.fw enable flag does not match config_firewall_node_dc_firewall_enable."
+    quiet: true
+
+- name: Read back the node host.fw
+  ansible.builtin.slurp:
+    src: "/etc/pve/nodes/{{ inventory_hostname }}/host.fw"
+  register: _host_readback
+
+- name: Assert the node restricts mgmt to OOB with a DROP policy
+  ansible.builtin.assert:
+    that:
+      - "'policy_in: DROP' in (_host_readback.content | b64decode)"
+      - "config_firewall_node_mgmt_cidr in (_host_readback.content | b64decode)"
+      - "'dport 8006' in (_host_readback.content | b64decode)"
+      - "'dport 22' in (_host_readback.content | b64decode)"
+    fail_msg: >-
+      host.fw is missing the DROP policy, the OOB mgmt allowlist, or the
+      web UI / SSH rules. Refusing to claim the node is hardened.
+    quiet: true
+
+- name: Confirm the firewall config compiles cleanly
+  ansible.builtin.command:
+    cmd: pve-firewall compile
+  register: _pve_compile
+  changed_when: false
+  failed_when: _pve_compile.rc != 0
+
+- name: Summarise node firewall verification
+  ansible.builtin.debug:
+    msg:
+      - "node: {{ inventory_hostname }}"
+      - "datacenter firewall enabled: {{ 'enable: 1' in (_dc_readback.content | b64decode) }}"
+      - "node policy_in DROP: {{ 'policy_in: DROP' in (_host_readback.content | b64decode) }}"
+      - "mgmt restricted to: {{ config_firewall_node_mgmt_cidr }}"
+      - "compiles ok: {{ _pve_compile.rc == 0 }}"

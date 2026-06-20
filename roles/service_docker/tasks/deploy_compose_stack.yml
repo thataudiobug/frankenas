@@ -1,0 +1,101 @@
+---
+# Render and bring up a single compose stack (looped over by
+# deploy_compose.yml with stack_key set to the catalog key).
+
+- name: "Resolve the catalog entry for stack '{{ stack_key }}'"
+  ansible.builtin.set_fact:
+    _stack: "{{ compose_catalog[stack_key] }}"
+    _stack_dir: "{{ docker_compose_root }}/{{ stack_key }}"
+    _stack_project: "{{ compose_catalog[stack_key].project | default(stack_key) }}"
+
+- name: "Ensure the project directory exists for '{{ stack_key }}'"
+  ansible.builtin.file:
+    path: "{{ _stack_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+# Resolve the selected VPN provider entry (minus the custom_ovpn blob, which
+# is written to disk by provision_proxmox, not passed as env) for stacks that route
+# through gluetun. Harmless no-op for stacks that don't reference it.
+- name: "Resolve VPN provider env for '{{ stack_key }}'"
+  ansible.builtin.set_fact:
+    _piracy_vpn: >-
+      {{
+        (vpn_provider_catalog[vpn_provider_enabled] | default({}, true))
+        | dict2items | rejectattr('key', 'eq', 'custom_ovpn') | items2dict
+      }}
+  when:
+    - vpn_provider_enabled is defined
+    - vpn_provider_catalog is defined
+
+# Optional env file FIRST so the compose file can interpolate from it.
+# no_log: it carries vault secrets (VPN creds, etc.).
+- name: "Render the env file for '{{ stack_key }}'"
+  ansible.builtin.template:
+    src: "compose/{{ _stack.env }}"
+    dest: "{{ _stack_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: _stack.env is defined
+  register: _stack_env
+
+- name: "Render the compose file for '{{ stack_key }}'"
+  ansible.builtin.template:
+    src: "compose/{{ _stack.template }}"
+    dest: "{{ _stack_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  register: _stack_compose
+
+# Guard: a custom-OpenVPN gluetun stack needs its .ovpn on disk, written by
+# provision_proxmox from the vault. If that vault content was empty/unset, gluetun comes
+# up with no config and the tunnel never connects — surfacing only as a
+# cryptic "container gluetun is unhealthy" ~150s into `compose up`. Fail
+# early and clearly instead. (Only checks when the selected provider is a
+# custom OpenVPN one that points at a config file.)
+- name: "Check the gluetun custom OpenVPN config exists for '{{ stack_key }}'"
+  ansible.builtin.stat:
+    path: "{{ droplet_bind_catalog.config.mnt }}/gluetun/custom.ovpn"
+  register: _gluetun_ovpn
+  when:
+    - vpn_provider_enabled is defined
+    - vpn_provider_catalog is defined
+    - (vpn_provider_catalog[vpn_provider_enabled].OPENVPN_CUSTOM_CONFIG | default('')) | length > 0
+
+- name: "Assert the gluetun custom OpenVPN config is present and non-empty"
+  ansible.builtin.assert:
+    that:
+      - _gluetun_ovpn.stat.exists
+      - _gluetun_ovpn.stat.size > 0
+    fail_msg: >-
+      gluetun's custom OpenVPN config is missing or empty at
+      {{ droplet_bind_catalog.config.mnt }}/gluetun/custom.ovpn. provision_proxmox writes
+      it from vpn_provider_catalog.{{ vpn_provider_enabled }}.custom_ovpn
+      (vault). Confirm that vault var holds the full .ovpn text and re-run the
+      provision_proxmox build step. Without it gluetun can't build the tunnel and the
+      stack will fail as 'gluetun unhealthy'.
+    quiet: true
+  when:
+    - vpn_provider_enabled is defined
+    - vpn_provider_catalog is defined
+    - (vpn_provider_catalog[vpn_provider_enabled].OPENVPN_CUSTOM_CONFIG | default('')) | length > 0
+
+- name: "Bring up the '{{ stack_key }}' stack"
+  community.docker.docker_compose_v2:
+    project_src: "{{ _stack_dir }}"
+    project_name: "{{ _stack_project }}"
+    state: present
+    # Recreate containers when the rendered compose/env changed, so config
+    # edits actually take effect (compose only recreates on diff otherwise).
+    recreate: "{{ 'always' if (_stack_compose.changed or _stack_env.changed | default(false)) else 'auto' }}"
+    pull: "{{ compose_pull_policy | default('missing') }}"
+  register: _stack_up
+
+- name: "Show '{{ stack_key }}' stack result"
+  ansible.builtin.debug:
+    msg: "Stack '{{ stack_key }}' ({{ _stack_project }}): {{ _stack_up.containers | default([]) | map(attribute='Name') | list }}"

@@ -40,6 +40,11 @@ class Layout:
     def host_vars_dir(self) -> Path:
         return self.inventory_dir / "host_vars"
 
+    @property
+    def roles_dir(self) -> Path:
+        """Directory holding Ansible roles (``<project_root>/roles``)."""
+        return self.project_root / "roles"
+
 
 def _find_ansible_cfg(start: Path) -> Path | None:
     """Walk upward from ``start`` looking for ansible.cfg."""

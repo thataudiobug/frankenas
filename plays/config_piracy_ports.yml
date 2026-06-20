@@ -1,0 +1,29 @@
+# Deploy VPN-enabled docker hosts for the arr stack.
+#
+#   ansible-playbook plays/deploy_piracy_ports.yml --limit <host>
+#
+# Run with the vault available so gluetun VPN credentials resolve.
+# (frankinception's play runner supplies the vault password via PTY.)
+#
+# VPN model: a gluetun sidecar container builds the tunnel INSIDE docker and
+# qbittorrent routes through it (network_mode: service:gluetun) with
+# gluetun's built-in fail-closed kill switch. This REPLACES the old
+# host-level OpenVPN + nftables kill switch (the config_vpn_client role,
+# kept for possible pct-layer VPNs later). The only host-level requirement
+# is /dev/net/tun passthrough, which provision_proxmox provisions when the
+# host sets pct_needs_tun: true.
+---
+- name: Provision pct Guests (with tun passthrough for gluetun)
+  hosts: piracy
+  gather_facts: false
+  connection: local
+  roles:
+    - role: provision_proxmox
+      when: "'droplets' in group_names"
+
+- name: Deploy Docker Roles (gluetun sidecar + arr stack)
+  hosts: piracy
+  gather_facts: true
+  become: true
+  roles:
+    - role: service_docker

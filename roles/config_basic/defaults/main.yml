@@ -1,0 +1,26 @@
+---
+# defaults file for config_basic
+#
+# config_basic is the universal host bring-up: SSH keys, Python, an initial
+# package refresh, and always-on unattended SECURITY upgrades. The upgrade
+# tunables below moved here from co_hst_sec when upgrades became a basic,
+# always-enabled concern.
+
+# Security origins unattended-upgrades is allowed to pull from.
+config_basic_upgrade_origins:
+  - "${distro_id}:${distro_codename}-security"
+  - "${distro_id}ESMApps:${distro_codename}-apps-security"
+  - "${distro_id}ESM:${distro_codename}-infra-security"
+
+# Auto-reboot when a patch needs it (e.g. kernel). Off by default so a host
+# never disappears unexpectedly; turn on per-host with a sane reboot time.
+config_basic_upgrade_automatic_reboot: false
+config_basic_upgrade_automatic_reboot_time: "03:30"
+
+# Remove unused dependencies/kernels after upgrades to keep /boot from
+# filling (a classic silent failure on small guests).
+config_basic_upgrade_remove_unused_dependencies: true
+
+# How often (in days) the apt periodic timer runs the update/upgrade steps.
+config_basic_upgrade_update_package_lists: 1
+config_basic_upgrade_unattended_upgrade_interval: 1

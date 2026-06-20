@@ -1,0 +1,18 @@
+---
+# defaults file for config_time
+#
+# Time synchronisation (chrony). Correlating logs across hosts is only
+# meaningful if their clocks agree, so this is a prerequisite for the
+# log-aggregation work. Split out of the old config_time.
+#
+# LXC guests inherit the PVE host clock and cannot set their own (no
+# CAP_SYS_TIME), so the role no-ops there automatically — only baremetal and
+# qemu actually run chrony.
+
+config_time_chrony_service_name: "chrony"
+
+# NTP sources. Default to public pools; point these at an internal time
+# source if you add one later. Each entry: { address: <host>, pool: bool }
+config_time_chrony_servers:
+  - { address: "time.cloudflare.com", pool: false }
+  - { address: "pool.ntp.org", pool: true }

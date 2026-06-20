@@ -1,0 +1,5 @@
+---
+# handlers file for service_lldap
+#
+# LLDAP is env-configured (no rendered config file), so this role has no
+# config to notify on. The container lifecycle is owned by the `docker` role.

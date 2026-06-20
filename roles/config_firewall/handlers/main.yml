@@ -1,0 +1,30 @@
+---
+# handlers file for config_firewall
+#
+# Three enforcement layers, three reload paths. Only the handler(s) for the
+# layer that ran will be notified.
+
+# -- Proxmox GUEST layer: compile on the pve node via delegation -----------
+# The guest play targets the guest, so we reach the pve node over ssh. Guest
+# .fw files live on pmxcfs and pve-firewall picks them up, but an explicit
+# compile makes the change synchronous so verification sees it.
+- name: Reload pve-firewall
+  ansible.builtin.command:
+    cmd: pve-firewall compile
+  delegate_to: "{{ config_firewall_guest_node }}"
+  connection: ssh
+  changed_when: false
+
+# -- Proxmox NODE layer: compile locally (the play already runs on pve) ----
+- name: Reload pve-firewall (node)
+  ansible.builtin.command:
+    cmd: pve-firewall compile
+  changed_when: false
+
+# -- In-guest baseline: atomic nftables ruleset swap -----------------------
+# Validation already happened via the template's `nft -c -f` guard before the
+# file was written.
+- name: Reload nftables
+  ansible.builtin.command:
+    cmd: "nft -f {{ config_firewall_conf_path }}"
+  changed_when: true

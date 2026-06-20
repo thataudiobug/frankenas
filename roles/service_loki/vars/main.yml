@@ -1,0 +1,3 @@
+---
+# vars file for service_loki
+# (Tunables live in defaults/main.yml so they can be overridden per host.)

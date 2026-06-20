@@ -1,0 +1,13 @@
+galaxy_info:
+  author: frankenas
+  description: Central Loki log store config + storage layout on bind storage
+  license: MIT
+  min_ansible_version: "2.1"
+  galaxy_tags: []
+
+# Loki ships its data to Grafana for visualisation. Grafana is a separate,
+# reusable role; pull it in as a dependency so deploying the log store also
+# provisions its query front end. (Grafana can also be used stand-alone for
+# other datasources.)
+dependencies:
+  - role: service_grafana

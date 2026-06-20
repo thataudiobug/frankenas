@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Pinned static-anchor DNS record for {{ inventory_hostname }}, written by
+# the config_pinned_dns role (delegated to the dnsmasq server). This host has
+# a static OOB IP below the DHCP pool, so dnsmasq never auto-registers it from
+# a lease — this explicit record is what makes its FQDN resolve.
+host-record={{ config_pinned_dns_record }}.{{ config_pinned_dns_domain }},{{ config_pinned_dns_ip }}

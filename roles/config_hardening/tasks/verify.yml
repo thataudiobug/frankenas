@@ -1,0 +1,34 @@
+---
+# Verification for config_hardening. Read-only: inspects the effective sshd
+# config and asserts the hardening landed. Firewall/upgrade verification now
+# live in config_firewall / config_basic respectively.
+
+- name: Verify the effective sshd config parses cleanly
+  ansible.builtin.command:
+    cmd: sshd -t
+  changed_when: false
+  when: config_hardening_ssh_harden_enabled | bool
+
+- name: Read back the effective sshd auth settings
+  ansible.builtin.command:
+    cmd: sshd -T
+  register: config_hardening_sshd_effective
+  changed_when: false
+  when: config_hardening_ssh_harden_enabled | bool
+
+- name: Assert password auth is disabled in the effective config
+  ansible.builtin.assert:
+    that:
+      - "'passwordauthentication no' in config_hardening_sshd_effective.stdout | lower"
+    fail_msg: >-
+      sshd still reports password authentication enabled. Check for a later
+      drop-in overriding {{ config_hardening_ssh_dropin_filename }}.
+    quiet: true
+  when:
+    - config_hardening_ssh_harden_enabled | bool
+    - config_hardening_ssh_password_authentication == "no"
+
+- name: Summarise hardening verification
+  ansible.builtin.debug:
+    msg:
+      - "ssh hardened: {{ config_hardening_ssh_harden_enabled | bool }}"

@@ -1,3 +1,0 @@
----
-# vars file for co_hst_log
-# (Tunables live in defaults/main.yml so they can be overridden per host.)

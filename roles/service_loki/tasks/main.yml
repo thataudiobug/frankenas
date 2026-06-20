@@ -1,0 +1,64 @@
+---
+# tasks file for service_loki
+#
+# Prepares config + storage for the central Loki log store on Mollymauk. The
+# Loki container is deployed separately by service_docker (catalog entry
+# loki). Grafana (the query/visualisation front end) is its own role,
+# service_grafana, pulled in as a dependency (see meta/main.yml) since
+# Grafana is reusable for non-Loki datasources too.
+#
+# Sequence:
+#   1. preflight (storage bind present)
+#   2. create the Loki data dirs on the Nott bind
+#   3. render loki-config.yaml (retention, compactor, filesystem store)
+#   4. verify
+
+# -- 1. Preflight ------------------------------------------------------
+- name: Assert the Nott storage bind is mounted
+  ansible.builtin.assert:
+    that:
+      - service_loki_data_root is defined
+      - (service_loki_data_root | dirname) is mount or (service_loki_data_root | dirname == '/mnt/nott')
+    fail_msg: >-
+      Expected the Nott bind at /mnt/nott. Ensure Mollymauk enables the
+      'nott' droplet_bind and provision_proxmox applied it before this role
+      runs.
+    quiet: true
+
+# -- 2. Storage dirs ---------------------------------------------------
+- name: Create Loki data directories on the Nott bind
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    # Loki container runs as uid 10001 by default; align ownership so it can
+    # write chunks on the bind.
+    owner: "10001"
+    group: "10001"
+    mode: "0750"
+  loop: "{{ service_loki_loki_dirs }}"
+
+- name: Create the Loki config directory
+  ansible.builtin.file:
+    path: "{{ service_loki_config_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# -- 3. Loki config ----------------------------------------------------
+- name: Render the Loki configuration
+  ansible.builtin.template:
+    src: loki-config.yaml.j2
+    dest: "{{ service_loki_config_root }}/loki-config.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recreate loki container
+
+- name: Flush handlers so Loki picks up new config before verify
+  ansible.builtin.meta: flush_handlers
+
+# -- 4. Verify ---------------------------------------------------------
+- name: Verify the Loki store
+  ansible.builtin.include_tasks: verify.yml
+  when: service_loki_verify | bool

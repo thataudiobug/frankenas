@@ -1,7 +1,0 @@
----
-# handlers file for es_hst_pve
-
-- name: Reload pve-firewall
-  ansible.builtin.command:
-    cmd: pve-firewall compile
-  changed_when: false

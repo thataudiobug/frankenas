@@ -1,0 +1,93 @@
+---
+# defaults file for config_logging
+#
+# config_logging ("common host logging") installs the Grafana Alloy agent on
+# every host and ships logs to the central Loki server (Mollymauk) over the
+# OOB management network. It's the fleet-wide log shipper, sibling to
+# config_hardening.
+#
+# Why Alloy: it's the current Grafana shipping agent and the supported
+# successor to Promtail (which is deprecated/EOL). One agent collects
+# journald, Docker container logs, and arbitrary files.
+#
+# Log SOURCES per host follow the repo's catalog -> enabled framework:
+#   * log_sources_catalog (group_var)  — named source profiles
+#   * log_sources_enabled (host_var)   — list of profiles this host ships
+#   * log_sources_overrides (host_var) — optional per-host tweaks
+# Every host ships journald via the always-on 'base' profile below; docker
+# hosts add 'docker', the proxy adds file tailing, etc.
+
+# =====================================================================
+# Master switch
+# =====================================================================
+#
+# Defaults ON fleet-wide (the user wants everything logging centrally). The
+# log SERVER itself sets this false to avoid an agent shipping to its own
+# Loki in a loop before Loki is up (the server scrapes its own journald via
+# the docker stack / a local source instead if desired).
+config_logging_enabled: true
+
+# =====================================================================
+# Central Loki endpoint (over OOB)
+# =====================================================================
+#
+# Ship to Mollymauk on the OOB network. Using the OOB FQDN keeps log traffic
+# off the WAN entirely and reachable through the VPN kill switch (mgmt CIDR
+# bypasses the tunnel). Loki has no auth by default, so this MUST stay an
+# OOB-only address — never a WAN/public one.
+config_logging_loki_host: "mollymauk.oob.frankenas.lan"
+config_logging_loki_port: 3100
+config_logging_loki_url: "http://{{ config_logging_loki_host }}:{{ config_logging_loki_port }}/loki/api/v1/push"
+
+# =====================================================================
+# Alloy install / service
+# =====================================================================
+# Grafana's apt repo (Alloy ships there). Pinned key + repo line.
+config_logging_alloy_apt_key_url: "https://apt.grafana.com/gpg.key"
+config_logging_alloy_apt_repo: "deb https://apt.grafana.com stable main"
+config_logging_alloy_service_name: "alloy"
+
+# Alloy loads a config DIRECTORY (all *.alloy files merged into one config),
+# not a single file. This lets other roles contribute source snippets that
+# reference the base sink without config_logging knowing about them — notably the
+# `docker` role drops a docker-source snippet here AFTER it installs Docker,
+# so docker concerns never leak onto non-docker hosts.
+config_logging_alloy_config_dir: "/etc/alloy/config.d"
+# The base config config_logging owns (sink + journald + files). Numbered so it
+# loads first and additive snippets (e.g. 30-docker.alloy) sort after it.
+config_logging_alloy_base_config: "{{ config_logging_alloy_config_dir }}/10-base.alloy"
+# Alloy's env file; we point CONFIG_FILE at the directory here.
+config_logging_alloy_env_file: "/etc/default/alloy"
+
+# =====================================================================
+# Source selection (catalog -> enabled -> overrides)
+# =====================================================================
+# Profiles a host can enable. 'base' (journald) is always shipped and need
+# not be listed. Moved here from group_vars/all in Phase 3; frankinception
+# discovers it via the `# pick many` marker.
+log_sources_catalog:  # pick many
+  base:
+    journal: true
+  docker:
+    journal: true
+    docker: true
+  npm:
+    journal: true
+    files:
+      - { path: "/mnt/config/npm/data/logs/*_access.log", job: "npm-access" }
+      - { path: "/mnt/config/npm/data/logs/*_error.log", job: "npm-error" }
+  pve:
+    journal: true
+    files:
+      - { path: "/var/log/pve/tasks/**/*", job: "pve-tasks" }
+
+# Host-var: list of extra profiles beyond 'base'. Empty => journald only.
+log_sources_enabled: []
+log_sources_overrides: {}
+
+# Static labels attached to every stream from this host, so you can filter /
+# correlate in Grafana by host, group, environment.
+config_logging_extra_labels: {}
+
+# Re-check the agent is up and pointed at Loki after configuring.
+config_logging_verify: true

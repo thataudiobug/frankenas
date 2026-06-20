@@ -1,0 +1,21 @@
+---
+# defaults file for service_grafana
+#
+# Grafana config + datasource provisioning. Container deployed by
+# service_docker (catalog entry grafana). Reusable for any datasource; today
+# it wires Loki.
+#
+# Var names use a grafana_* namespace from the start (this role is new), with
+# values matching what the old service_loki used so behaviour is unchanged.
+
+# Config bind root for Grafana provisioning files.
+grafana_config_root: "/mnt/config/grafana"
+
+grafana_port: 3000
+grafana_admin_user: "admin"
+# Pull from vault in real use. Placeholder forces an override; the preflight
+# asserts it was changed.
+grafana_admin_password: "CHANGE_ME_IN_VAULT"
+
+# Where Grafana reaches the Loki datasource (over the docker network by name).
+grafana_loki_datasource_url: "http://loki:3100"

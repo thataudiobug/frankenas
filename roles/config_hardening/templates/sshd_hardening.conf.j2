@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+#
+# Hardened sshd drop-in for {{ inventory_hostname }} (managed by config_hardening).
+# Edit the role's defaults/host_vars, not this file — it is regenerated.
+#
+# Drop-ins are read in lexical order and the FIRST value for a keyword wins,
+# so this file (10-...) overrides anything set later by the distro.
+
+# --- Authentication -------------------------------------------------------
+PermitRootLogin {{ config_hardening_ssh_permit_root_login }}
+PasswordAuthentication {{ config_hardening_ssh_password_authentication }}
+KbdInteractiveAuthentication {{ config_hardening_ssh_kbd_interactive_authentication }}
+PubkeyAuthentication {{ config_hardening_ssh_pubkey_authentication }}
+PermitEmptyPasswords no
+
+# --- Brute-force / exposure reduction ------------------------------------
+MaxAuthTries {{ config_hardening_ssh_max_auth_tries }}
+LoginGraceTime {{ config_hardening_ssh_login_grace_time }}
+
+# --- Forwarding (off unless a host explicitly needs it) ------------------
+X11Forwarding {{ config_hardening_ssh_x11_forwarding }}
+AllowAgentForwarding {{ config_hardening_ssh_allow_agent_forwarding }}
+
+# --- Idle session reaping ------------------------------------------------
+ClientAliveInterval {{ config_hardening_ssh_client_alive_interval }}
+ClientAliveCountMax {{ config_hardening_ssh_client_alive_count_max }}

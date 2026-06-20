@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+#
+# Grafana datasource provisioning: wires Loki in automatically so the single
+# pane works on first boot. Managed by service_grafana.
+
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: "{{ grafana_loki_datasource_url }}"
+    isDefault: true
+    jsonData:
+      # Generous timeout for wide time-range correlation queries.
+      timeout: 60
+      maxLines: 5000

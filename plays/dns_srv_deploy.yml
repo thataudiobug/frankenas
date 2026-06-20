@@ -1,6 +1,0 @@
-- name: Configure dnsmasq DHCP + DNS
-  hosts: dns_srv
-  gather_facts: true
-  become: true
-  roles:
-    - dl_dns_srv
