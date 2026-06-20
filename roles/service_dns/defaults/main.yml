@@ -30,6 +30,7 @@
 #       dhcp_start: "10.128.0.10"
 #       dhcp_end: "10.128.255.254"
 #       dhcp_lease: "12h"
+#       local_ttl: 60
 #       static_hosts: [{name: pve, ip: 10.128.0.1}, ...]
 #       upstream_dns: ["1.1.1.1", "9.9.9.9"]
 
@@ -44,6 +45,11 @@ dns_srv_catalog:  # pick one
     dhcp_start: "10.128.0.10"           # excludes anchor block .1-.9
     dhcp_end: "10.128.255.254"
     dhcp_lease: "12h"
+    # TTL (s) for locally-authoritative answers. dnsmasq defaults to 0
+    # ("never cache"), which makes nginx (NPM) re-resolve hostname upstreams
+    # on every request and flood this resolver -> intermittent 502s. A small
+    # non-zero value lets clients cache. See oob-dns-dhcp.conf.j2.
+    local_ttl: 60
     # Recovery-path anchors: authoritative A records, never leased. ONLY the
     # bootstrap-critical trio lives here — the hosts that must resolve before
     # any play can run (and therefore before config_pinned_dns could publish
