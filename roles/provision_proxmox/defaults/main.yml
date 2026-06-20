@@ -53,8 +53,16 @@ dns_catalog:  # pick one
   # LXC 'nameserver'/'searchdomain'), so the guest has working DNS from first
   # boot — before it ever runs apt. Pick one with `dns_enabled: <key>`.
   oob:
-    # Normal hosts resolve through the OOB dnsmasq server.
-    nameserver: "10.128.0.2 1.1.1.1 8.8.8.8"
+    # Normal hosts resolve ONLY through the OOB dnsmasq server. dnsmasq is
+    # authoritative for oob.frankenas.lan and forwards everything else to its
+    # own configured upstreams, so a single resolver here is sufficient AND
+    # correct — clients must never hold public resolvers (1.1.1.1/8.8.8.8) in
+    # their list. If they did, libc resolver rotation/fallback would send an
+    # internal-name query straight to a public resolver, which has no idea
+    # about oob.frankenas.lan and returns an authoritative NXDOMAIN. That is
+    # exactly what caused nginx (NPM) "could not be resolved (3: Host not
+    # found)" -> 502s: queries leaking past dnsmasq to 1.1.1.1/8.8.8.8.
+    nameserver: "10.128.0.2"
     searchdomain: "oob.frankenas.lan"
   public:
     # Bootstrap profile: public resolvers. Used by the dnsmasq server itself
